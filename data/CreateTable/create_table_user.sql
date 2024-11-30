@@ -1,8 +1,8 @@
--- Table: public.USER
+-- Table: public.User
 
--- DROP TABLE IF EXISTS public."USER";
+-- DROP TABLE IF EXISTS public."User";
 
-CREATE TABLE IF NOT EXISTS public."USER"
+CREATE TABLE IF NOT EXISTS public."User"
 (
     user_id bigint NOT NULL,
     user_name character varying(16) COLLATE pg_catalog."default" NOT NULL,
@@ -15,5 +15,5 @@ CREATE TABLE IF NOT EXISTS public."USER"
 
 TABLESPACE pg_default;
 
-ALTER TABLE IF EXISTS public."USER"
+ALTER TABLE IF EXISTS public."User"
     OWNER to postgres;
