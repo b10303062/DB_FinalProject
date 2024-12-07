@@ -109,7 +109,13 @@ def _init_page(server_sock: socket.socket, pages: list[str]) -> int:
             print("Invalid option id. Please enter again.")
 
 def _sign_in_page(server_sock: socket.socket, pages: list[str]) -> int:
-    user_id = int(input("User ID: "))
+    while True:
+        user_id = input("User ID: ")
+        try:
+            user_id = int(user_id)
+            break
+        except:
+            print("Invalid input. Please try again.")
     password = getpass.getpass(prompt = "Password: ")
     request = {
         "requestType": "sign in",
