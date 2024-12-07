@@ -20,13 +20,6 @@ BUFFER_MAXLEN = 4096
 client_id2sock = {}
 
 # PostgreSQL connection
-pg_conn = psycopg.connect(
-    host = "localhost",
-    port = 5432,
-    user = "postgres",
-    password = "postgres",
-    dbname = "Steam-Together-fortest"
-)
 
 REQUEST_MAP = {
     "exit": 0,
@@ -46,11 +39,11 @@ REQUEST_MAP = {
     "leave room": 14
 }
 
-def _user_exit(request: dict, cursor: Cursor, client_sock: socket.socket):
+def _user_exit(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     user_id = request["userID"]
     client_id2sock.pop(user_id)
 
-def _user_sign_in(request: dict, cursor: Cursor, client_sock: socket.socket):
+def _user_sign_in(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
         user_id = request["userID"]
         query = """
@@ -102,7 +95,7 @@ def _user_sign_in(request: dict, cursor: Cursor, client_sock: socket.socket):
 
     sendall(client_sock, response)
 
-def _user_sign_up(request: dict, cursor: Cursor, client_sock: socket.socket):
+def _user_sign_up(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
         user_name = request["userName"].replace("\'", "\'\'")
         email = request["email"].replace("\'", "\'\'")
@@ -141,7 +134,7 @@ def _user_sign_up(request: dict, cursor: Cursor, client_sock: socket.socket):
     
     sendall(client_sock, response)
 
-def _user_search_games(request: dict, cursor: Cursor, client_sock: socket.socket):
+def _user_search_games(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
         game_name = request.get("gameName")
         genres = request.get("genres")
@@ -206,7 +199,7 @@ def _user_search_games(request: dict, cursor: Cursor, client_sock: socket.socket
     
     sendall(client_sock, response)
 
-def _user_add_reviews(request: dict, cursor: Cursor, client_sock: socket.socket):
+def _user_add_reviews(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
         user_id = request["userID"]
         game_id = request["gameID"]
@@ -252,7 +245,7 @@ def _user_add_reviews(request: dict, cursor: Cursor, client_sock: socket.socket)
         
     sendall(client_sock, response)
 
-def _user_delete_reviews(request: dict, cursor: Cursor, client_sock: socket.socket):
+def _user_delete_reviews(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
         user_id = request["userID"]
         game_id = request["gameID"]
@@ -279,7 +272,7 @@ def _user_delete_reviews(request: dict, cursor: Cursor, client_sock: socket.sock
 
     sendall(client_sock, response)
 
-def _user_add_to_favorites(request: dict, cursor: Cursor, client_sock: socket.socket):
+def _user_add_to_favorites(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
         user_id = request["userID"]
         game_id = request["gameID"]
@@ -304,6 +297,7 @@ def _user_add_to_favorites(request: dict, cursor: Cursor, client_sock: socket.so
             }
 
             pg_conn.commit()
+        
         else:
             response = {
                 "status": "FAIL",
@@ -322,7 +316,7 @@ def _user_add_to_favorites(request: dict, cursor: Cursor, client_sock: socket.so
 
     sendall(client_sock, response)
 
-def _user_create_room(request: dict, cursor: Cursor, client_sock: socket.socket):
+def _user_create_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
         user_id = request["userID"]
         room_name = request["roomName"].replace("\'", "\'\'")
@@ -375,7 +369,7 @@ def _user_create_room(request: dict, cursor: Cursor, client_sock: socket.socket)
 
     sendall(client_sock, response)
 
-def _user_join_room(request: dict, cursor: Cursor, client_sock: socket.socket):
+def _user_join_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
         user_id = request["userID"]
         room_id = request["roomID"]
@@ -431,6 +425,30 @@ def _user_join_room(request: dict, cursor: Cursor, client_sock: socket.socket):
                 "gameName": game_name
             }
 
+            query = """
+                    SELECT "user_name"
+                    FROM "user"
+                    WHERE "user_id" = {};
+                    """.format(user_id)
+            cursor.execute(query)
+            user_name = cursor.fetchone()["user_name"]
+
+            response_broadcast = {
+                "status": "OK",
+                "messageType": "room control",
+                "event": "join",
+                "userID": user_id,
+                "userName": user_name
+            }
+
+            query = """
+                    SELECT "user_id", "leave_time"
+                    FROM "user_in_room"
+                    WHERE "room_id" = {};
+                    """.format(room_id)
+            cursor.execute(query)
+            rows = cursor.fetchall()
+
             pg_conn.commit()
 
         elif status == "Closed":
@@ -451,8 +469,11 @@ def _user_join_room(request: dict, cursor: Cursor, client_sock: socket.socket):
         }
 
     sendall(client_sock, response)
+    for row in rows:
+        if row["user_id"] != user_id and not row["leave_time"]:
+            sendall(client_id2sock[row["user_id"]], response_broadcast)
 
-def _user_check_user(request: dict, cursor: Cursor, client_sock: socket.socket):
+def _user_check_user(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
         user_id = request["userID"]
 
@@ -498,12 +519,15 @@ def _user_check_user(request: dict, cursor: Cursor, client_sock: socket.socket):
                 "errorMessage": "User not found"
             }
 
+        pg_conn.commit()
+
     except Exception as e:
+        pg_conn.rollback()
         print("[Error] {}".format(e))
 
     sendall(client_sock, response)
 
-def _user_update_profile(request: dict, cursor: Cursor, client_sock: socket.socket):
+def _user_update_profile(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     user_id = request["userID"]
     new_name = request["updated"].get("name")
     new_email = request["updated"].get("email")
@@ -561,7 +585,7 @@ def _user_update_profile(request: dict, cursor: Cursor, client_sock: socket.sock
 
     sendall(client_sock, response)
 
-def _user_list_rooms(request: dict, cursor: Cursor, client_sock: socket.socket):
+def _user_list_rooms(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
         game_id = request.get("gameID")
 
@@ -588,8 +612,11 @@ def _user_list_rooms(request: dict, cursor: Cursor, client_sock: socket.socket):
                 "hostID": row["creator_id"],
                 "hostName": row["user_name"]
             })
+
+        pg_conn.commit()
     
     except Exception as e:
+        pg_conn.rollback()
         print("[Error] {}".format(e))
         response = {
             "status": "FAIL",
@@ -598,7 +625,7 @@ def _user_list_rooms(request: dict, cursor: Cursor, client_sock: socket.socket):
 
     sendall(client_sock, response)
 
-def _user_check_reviews(request: dict, cursor: Cursor, client_sock: socket.socket):
+def _user_check_reviews(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
         user_id = request.get("userID")
         game_id = request["gameID"]
@@ -626,7 +653,10 @@ def _user_check_reviews(request: dict, cursor: Cursor, client_sock: socket.socke
                 "reviewRating": row["rating"]
             })
 
+        pg_conn.commit()
+
     except Exception as e:
+        pg_conn.rollback()
         print("[Error] {}".format(e))
         response = {
             "status": "FAIL",
@@ -635,7 +665,7 @@ def _user_check_reviews(request: dict, cursor: Cursor, client_sock: socket.socke
     
     sendall(client_sock, response)
 
-def _user_room_communication(request: dict, cursor: Cursor, client_sock: socket.socket):
+def _user_room_communication(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
         room_id = request["roomID"]
         sender_id = request["fromUserID"]
@@ -664,14 +694,17 @@ def _user_room_communication(request: dict, cursor: Cursor, client_sock: socket.
         }
 
         query = """
-                SELECT "user_id"
+                SELECT "user_id", "leave_time"
                 FROM "user_in_room"
                 WHERE "room_id" = {};
                 """.format(room_id)
         cursor.execute(query)
         rows = cursor.fetchall()
 
+        pg_conn.commit()
+
     except Exception as e:
+        pg_conn.rollback()
         print("[Error] {}".format(e))
         response = {
             "status": "FAIL",
@@ -682,10 +715,10 @@ def _user_room_communication(request: dict, cursor: Cursor, client_sock: socket.
 
     sendall(client_sock, response_sender)
     for row in rows:
-        if row["user_id"] != sender_id:
+        if row["user_id"] != sender_id and not row["leave_time"]:
             sendall(client_id2sock[row["user_id"]], response_broadcast)
 
-def _user_leave_room(request: dict, cursor: Cursor, client_sock: socket.socket):
+def _user_leave_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
         user_id = request["userID"]
         room_id = request["roomID"]
@@ -709,21 +742,37 @@ def _user_leave_room(request: dict, cursor: Cursor, client_sock: socket.socket):
         response = {
             "status": "OK"
         }
+
+        query = """
+                SELECT "user_name"
+                FROM "user"
+                WHERE "user_id" = {};
+                """.format(user_id)
+        cursor.execute(query)
+        user_name = cursor.fetchone()["user_name"]
+
+        response_broadcast1 = {
+            "status": "OK",
+            "messageType": "room control",
+            "event": "leave",
+            "userID": user_id,
+            "userName": user_name
+        }
+
+        query = """
+                SELECT "user_id", "leave_time"
+                FROM "user_in_room"
+                WHERE "room_id" = {};
+                """.format(room_id)
+        cursor.execute(query)
+        rows = cursor.fetchall()
         
         if room_host_id == user_id:
-            response_broadcast = {
+            response_broadcast2 = {
                 "status": "OK",
                 "messageType": "room control",
-                "action": "leave"
+                "event": "close"
             }
-
-            query = """
-                    SELECT "user_id", "leave_time"
-                    FROM "user_in_room"
-                    WHERE "room_id" = {};
-                    """.format(room_id)
-            cursor.execute(query)
-            rows = cursor.fetchall()
 
             end_time = str(datetime.datetime.now().replace(microsecond=0))
             query = """
@@ -744,45 +793,47 @@ def _user_leave_room(request: dict, cursor: Cursor, client_sock: socket.socket):
         }
 
     sendall(client_sock, response)
-    if room_host_id == user_id:
-        for row in rows:
-            if row["user_id"] != user_id and not row["leave_time"]:
-                sendall(client_id2sock[row["user_id"]], response_broadcast)
+    for row in rows:
+        if row["user_id"] != user_id and not row["leave_time"]:
+            if room_host_id == user_id:
+                sendall(client_id2sock[row["user_id"]], response_broadcast2)
+            else:
+                sendall(client_id2sock[row["user_id"]], response_broadcast1)
 
-def handle_request(request: dict, cursor: Cursor, client_sock: socket.socket) -> int:
+def handle_request(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket) -> int:
     request_id = REQUEST_MAP[request["requestType"]]
     match request_id:
         case 0:
-            _user_exit(request, cursor, client_sock)
+            _user_exit(pg_conn, request, cursor, client_sock)
             return RETCODE_EXIT
         case 1:
-            _user_sign_in(request, cursor, client_sock)
+            _user_sign_in(pg_conn, request, cursor, client_sock)
         case 2:
-            _user_sign_up(request, cursor, client_sock)
+            _user_sign_up(pg_conn, request, cursor, client_sock)
         case 3:
-            _user_search_games(request, cursor, client_sock)
+            _user_search_games(pg_conn, request, cursor, client_sock)
         case 4:
-            _user_add_reviews(request, cursor, client_sock)
+            _user_add_reviews(pg_conn, request, cursor, client_sock)
         case 5:
-            _user_delete_reviews(request, cursor, client_sock)
+            _user_delete_reviews(pg_conn, request, cursor, client_sock)
         case 6:
-            _user_add_to_favorites(request, cursor, client_sock)
+            _user_add_to_favorites(pg_conn, request, cursor, client_sock)
         case 7:
-            _user_create_room(request, cursor, client_sock)
+            _user_create_room(pg_conn, request, cursor, client_sock)
         case 8:
-            _user_join_room(request, cursor, client_sock)
+            _user_join_room(pg_conn, request, cursor, client_sock)
         case 9:
-            _user_check_user(request, cursor, client_sock)
+            _user_check_user(pg_conn, request, cursor, client_sock)
         case 10:
-            _user_update_profile(request, cursor, client_sock)
+            _user_update_profile(pg_conn, request, cursor, client_sock)
         case 11:
-            _user_list_rooms(request, cursor, client_sock)
+            _user_list_rooms(pg_conn, request, cursor, client_sock)
         case 12:
-            _user_check_reviews(request, cursor, client_sock)
+            _user_check_reviews(pg_conn, request, cursor, client_sock)
         case 13:
-            _user_room_communication(request, cursor, client_sock)
+            _user_room_communication(pg_conn, request, cursor, client_sock)
         case 14:
-            _user_leave_room(request, cursor, client_sock)
+            _user_leave_room(pg_conn, request, cursor, client_sock)
         case _:
            return RETCODE_ERROR
 
@@ -790,12 +841,19 @@ def handle_request(request: dict, cursor: Cursor, client_sock: socket.socket) ->
 
 def handle_client(client_sock: socket.socket, client_addr):
     try:
+        pg_conn = psycopg.connect(
+            host = "localhost",
+            port = 5432,
+            user = "postgres",
+            password = "postgres",
+            dbname = "Steam-Together-fortest"
+        )
         cursor = pg_conn.cursor(row_factory = dict_row)
         while True:
             recv_data = client_sock.recv(BUFFER_MAXLEN)
             if len(recv_data) > 0:
                 request = json.loads(recv_data)
-                retcode = handle_request(request, cursor, client_sock)
+                retcode = handle_request(pg_conn, request, cursor, client_sock)
             if retcode == RETCODE_ERROR:
                 print("[Error] Failed to handle the request. Abort the client connection.")
                 break
@@ -806,6 +864,7 @@ def handle_client(client_sock: socket.socket, client_addr):
     finally:
         client_sock.close()
         cursor.close()
+        pg_conn.close()
         exit(0)
 
 def main(args):
@@ -831,7 +890,6 @@ def main(args):
 
     finally:
         sock.close()
-        pg_conn.close()
         clear_screen()
         exit(0)
 

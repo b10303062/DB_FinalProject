@@ -634,9 +634,11 @@ def _room_page(server_sock: socket.socket, pages: list[str]) -> int:
         print(pages[-1])
         for msg in messages:
             if msg[0] == user_state["userName"]:
-                print(FG_COLOR_YELLOW + "[{}] {}".format(msg[0], msg[1]) + STYLE_DEFAULT)
-            else:
+                print(STYLE_BOLD + "[{}] {}".format(msg[0], msg[1]) + STYLE_DEFAULT)
+            elif msg[0]:
                 print("[{}] {}".format(msg[0], msg[1]))
+            else:
+                print(FG_COLOR_YELLOW + msg[1] + STYLE_DEFAULT)
         print("\033[{};1HMessage > \033[0m".format(shutil.get_terminal_size()[1]), flush = True, end = "")
 
         readables, _, _ = select.select(rlist, [], [])
@@ -674,7 +676,11 @@ def _room_page(server_sock: socket.socket, pages: list[str]) -> int:
                     if server_message["messageType"] == "room communication":    
                         messages.append((server_message["fromUserName"], server_message["content"]))
                     elif server_message["messageType"] == "room control":
-                        if server_message["action"] == "leave":
+                        if server_message["event"] == "join":
+                            messages.append(("", "{} joined the room.".format(server_message["userName"])))
+                        elif server_message["event"] == "leave":
+                            messages.append(("", "{} left the room.".format(server_message["userName"])))
+                        elif server_message["event"] == "close":
                             request = {
                                 "requestType": "leave room",
                                 "userID": user_state["userID"],
@@ -685,6 +691,8 @@ def _room_page(server_sock: socket.socket, pages: list[str]) -> int:
                             if response["status"] == "OK":
                                 leave = True
                                 print("\033[{};1HThe room will be closed as the host has exited.\033[0m".format(shutil.get_terminal_size()[1]))
+                        else:
+                            return RETCODE_ERROR
     
     press_enter_to_continue()
     pages.append(PAGE_USER_DASHBOARD)
