@@ -305,6 +305,13 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[str]) -> int:
                 if response["status"] == "OK":
                     if opt == "A":
                         print("Your review on the game is recorded.")
+                    
+                        if response.get("recommendations"):
+                            print("\nRecommended games for you:")
+                            for rec in response["recommendations"]:
+                                print(f"- {rec['gameName']} (Positive Ratings: {rec['positiveRatings']})")
+
+
                         press_enter_to_continue()
                     else:
                         print("Your review on the game is deleted.")
