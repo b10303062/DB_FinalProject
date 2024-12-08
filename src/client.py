@@ -71,12 +71,32 @@ Please choose from the below options:
 PAGE_ROOM = \
 """{}""".format(PAGE_HEADER.format("ROOM"))
 
+PAGE_ADMIN = \
+"""{}
+Please choose from the below options:
+
+[1] Add game
+
+[2] Update game
+
+[3] Delete game
+
+[4] Setup promotion
+
+[5] Update user
+
+[c] Clear the screen
+
+[q] Quit
+""".format(PAGE_HEADER.format("Admin Dashboard"))
+
 PAGE2ID = {
     PAGE_INITIALIZE: 1,
     PAGE_SIGN_IN: 2,
     PAGE_SIGN_UP: 3,
     PAGE_USER_DASHBOARD: 4,
-    PAGE_ROOM: 5
+    PAGE_ROOM: 5,
+    PAGE_ADMIN: 6
 }
 
 # Record info for login user
@@ -133,7 +153,10 @@ def _sign_in_page(server_sock: socket.socket, pages: list[str]) -> int:
             pages.append(PAGE_USER_DASHBOARD)
             return RETCODE_NORMAL
         elif response["role"] == "Business Operator":
-            pass # TODO: handle business operator sign in
+            pages.append(PAGE_ADMIN)
+            return RETCODE_NORMAL
+        else:
+            return RETCODE_ERROR
     elif response["status"] == "FAIL":
         print("Sign in failed. Get the following error from the server: {}".format(response["errorMessage"]))
         press_enter_to_continue()
@@ -194,7 +217,7 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[str]) -> int:
                 game_name = input("Game name (Press ENTER if you want to skip this): ")
                 if game_name == "":
                     game_name = None
-                genres = input("Game genres (Press ENTER if you want to skip this. Split by commas if multiple inputs.): ")
+                genres = input("Game genres (Press ENTER if you want to skip this. Split by commas if multiple inputs): ")
                 genres = [genre.strip() for genre in genres.split(",")] if genres else None
                 while True:
                     price_low = input("Price lower bound (Press ENTER if you want to skip this): ")
@@ -267,7 +290,7 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[str]) -> int:
                 else:
                     return RETCODE_ERROR
 
-            case "2": # Add/Delete 
+            case "2": # Add/Delete Reviews
                 options_prompt = "What do you want to do with your review? [A]add [D]delete"
                 print(options_prompt)
 
@@ -370,12 +393,12 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[str]) -> int:
                     user_state["roomID"] = room_id
                     user_state["roomName"] = room_name
                     user_state["roomHost"] = user_state["userName"]
-                    print("The room is created. You will be redirected to the room now.")
-                    press_enter_to_continue()
+                    # print("The room is created. You will be redirected to the room now.")
+                    # press_enter_to_continue()
                     room_page = \
-"""{:=^{width}}\n
+"""{:=^{width}}
 {}{: ^{width}}{}
-{: ^{width}}\n
+{: ^{width}}
 {:=^{width}}
 {: ^{width}}
 {:=^{width}}
@@ -418,9 +441,9 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[str]) -> int:
                     user_state["roomName"] = room_name
                     user_state["roomHost"] = room_host
                     room_page = \
-"""{:=^{width}}\n
+"""{:=^{width}}
 {}{: ^{width}}{}
-{: ^{width}}\n
+{: ^{width}}
 {:=^{width}}
 {: ^{width}}
 {:=^{width}}
@@ -698,6 +721,315 @@ def _room_page(server_sock: socket.socket, pages: list[str]) -> int:
     pages.append(PAGE_USER_DASHBOARD)
     return RETCODE_NORMAL
 
+def _admin_page(server_sock: socket.socket, pages: list[str]) -> int:
+    while True:
+        command_prompt(user_state["userName"])
+        opt = input()
+        match opt:
+            case "1":
+                game_name = input("Game name: ")
+                while True:
+                    release_date = input("Release date in format YYYY-MM-DD: ")
+                    try:
+                        datetime.date.fromisoformat(release_date)
+                        break
+                    except Exception as e:
+                        print("Invalid input. Please try again.")
+                        print(FG_COLOR_YELLOW + "Hint: {}".format(e) + STYLE_DEFAULT)
+                genres = input("Game genres (Press ENTER if you want to skip this. Split by commas if multiple inputs): ")
+                genres = [genre.strip() for genre in genres.split(',')] if genres else None
+                while True:
+                    price = input("Price (Press ENTER if you want to skip this): ")
+                    if price:
+                        try:
+                            price = float(price)
+                            break
+                        except:
+                            print("Invalid input. Please try again.")
+                    else:
+                        price = None
+                        break
+                while True:
+                    total_achievements = input("Total achievements in the game (Press ENTER if you want to skip this): ")
+                    if total_achievements:
+                        try:
+                            total_achievements = int(total_achievements)
+                            break
+                        except:
+                            print("Invalid input. Please try again.")
+                    else:
+                        total_achievements = None
+                        break
+                while True:
+                    positive_ratings = input("Number of positive ratings (Press ENTER if you want to skip this): ")
+                    if positive_ratings:
+                        try:
+                            positive_ratings = float(positive_ratings)
+                            break
+                        except:
+                            print("Invalid input. Please try again.")
+                    else:
+                        positive_ratings = None
+                        break
+                while True:
+                    negative_ratings = input("Number of negative ratings (Press ENTER if you want to skip this): ")
+                    if negative_ratings:
+                        try:
+                            negative_ratings = float(negative_ratings)
+                            break
+                        except:
+                            print("Invalid input. Please try again.")
+                    else:
+                        negative_ratings = None
+                        break
+
+                request = {
+                    "requestType": "add game",
+                    "gameName": game_name,
+                    "genres": [],
+                    "releaseDate": release_date,
+                    "price": price,
+                    "totalAchievements": total_achievements,
+                    "positiveRatings": positive_ratings,
+                    "negativeRatings": negative_ratings
+                }
+                if genres:
+                    for genre in genres:
+                        request["genres"].append(genre)
+                
+                sendall(server_sock, request)
+                response = json.loads(recvall(server_sock, BUFFER_MAXLEN))
+
+                if response["status"] == "OK":
+                    print("The game has been added to the database.")
+                    print("The game id is {}. Please remember it.".format(response["gameID"]))
+                    press_enter_to_continue()
+                    return RETCODE_NORMAL
+                elif response["status"] == "FAIL":
+                    print("Failed to add the game into database. Get the following error from the server: {}".format(response["errorMessage"]))
+                    press_enter_to_continue()
+                    return RETCODE_NORMAL
+                else:
+                    return RETCODE_ERROR
+            
+            case "2":
+                while True:
+                    game_id = input("Game id: ")
+                    try:
+                        game_id = int(game_id)
+                        break
+                    except:
+                        print("Invalid input. Please try again.")
+                genres = input("Game genres (Press ENTER if you want to skip this. Split by commas if multiple inputs): ")
+                genres = [genre.strip() for genre in genres.split(',')] if genres else None
+                while True:
+                    price = input("Price (Press ENTER if you want to skip this): ")
+                    if price:
+                        try:
+                            price = float(price)
+                            break
+                        except:
+                            print("Invalid input. Please try again.")
+                    else:
+                        price = None
+                        break
+                while True:
+                    total_achievements = input("Total achievements in the game (Press ENTER if you want to skip this): ")
+                    if total_achievements:
+                        try:
+                            total_achievements = int(total_achievements)
+                            break
+                        except:
+                            print("Invalid input. Please try again.")
+                    else:
+                        total_achievements = None
+                        break
+                while True:
+                    positive_ratings = input("Number of positive ratings (Press ENTER if you want to skip this): ")
+                    if positive_ratings:
+                        try:
+                            positive_ratings = float(positive_ratings)
+                            break
+                        except:
+                            print("Invalid input. Please try again.")
+                    else:
+                        positive_ratings = None
+                        break
+                while True:
+                    negative_ratings = input("Number of negative ratings (Press ENTER if you want to skip this): ")
+                    if negative_ratings:
+                        try:
+                            negative_ratings = float(negative_ratings)
+                            break
+                        except:
+                            print("Invalud input. Please try again.")
+                    else:
+                        negative_ratings = None
+                        break
+
+                request = {
+                    "requestType": "update game",
+                    "gameID": game_id,
+                    "genres": [],
+                    "price": price,
+                    "totalAchievements": total_achievements,
+                    "positiveRatings": positive_ratings,
+                    "negativeRatings": negative_ratings
+                }
+                if genres:
+                    for genre in genres:
+                        request["genres"].append(genre)
+                
+                sendall(server_sock, request)
+                response = json.loads(recvall(server_sock, BUFFER_MAXLEN))
+
+                if response["status"] == "OK":
+                    print("The game has been updated.")
+                    press_enter_to_continue()
+                    return RETCODE_NORMAL
+                elif response["status"] == "FAIL":
+                    print("Failed to update the game. Get the following error from the server: {}".format(response["errorMessage"]))
+                    press_enter_to_continue()
+                    return RETCODE_NORMAL
+                else:
+                    return RETCODE_ERROR
+            
+            case "3":
+                while True:
+                    game_id = input("Game id: ")
+                    try:
+                        game_id = int(game_id)
+                        break
+                    except:
+                        print("Invalid input. Please try again.")
+                request = {
+                    "requestType": "delete game",
+                    "gameID": game_id
+                }
+
+                sendall(server_sock, request)
+                response = json.loads(recvall(server_sock, BUFFER_MAXLEN))
+
+                if response["status"] == "OK":
+                    print("The game has deleted.")
+                    press_enter_to_continue()
+                    return RETCODE_NORMAL
+                elif response["status"] == "FAIL":
+                    print("Failed to delete the game. Get the following error fromt the server: {}".format(response["errorMessage"]))
+                    press_enter_to_continue()
+                    return RETCODE_NORMAL
+                else:
+                    return RETCODE_ERROR
+            
+            case "4":
+                while True:
+                    start_date = input("Start date in format YYYY-MM-DD: ")
+                    try:
+                        datetime.date.fromisoformat(start_date)
+                        break
+                    except Exception as e:
+                        print("Invalid input. Please try again.")
+                        print(FG_COLOR_YELLOW + "Hint: {}".format(e) + STYLE_DEFAULT)
+                while True:
+                    end_date = input("End date in format YYYY-MM-DD: ")
+                    try:
+                        datetime.date.fromisoformat(end_date)
+                        break
+                    except Exception as e:
+                        print("Invalid input. Please try again.")
+                        print(FG_COLOR_YELLOW + "Hint: {}".format(e) + STYLE_DEFAULT)
+                while True:
+                    discount_rate = input("Discount rate in percentage format without the \'%\' (For example, input \'50\' instead of \'50%\'): ")
+                    try:
+                        discount_rate = int(discount_rate)
+                        break
+                    except:
+                        print("Invalid input. Please try again.")
+
+                request = {
+                    "requestType": "setup promotion",
+                    "startDate": start_date,
+                    "endDate": end_date,
+                    "discountRate": discount_rate
+                }
+                
+                sendall(server_sock, request)
+                response = json.loads(recvall(server_sock, BUFFER_MAXLEN))
+
+                if response["status"] == "OK":
+                    print("Setup ok.")
+                    press_enter_to_continue()
+                    return RETCODE_NORMAL
+                elif response["status"] == "FAIL":
+                    print("Setup failed. Get the following error from the server: {}".format(response["errorMessage"]))
+                    press_enter_to_continue()
+                    return RETCODE_NORMAL
+                else:
+                    return RETCODE_ERROR
+            
+            case "5":
+                print("Please enter the new information. You can press ENTER to skip if you're not going to update that information.")
+                while True:
+                    user_id = input("User id: ")
+                    try:
+                        user_id = int(user_id)
+                        break
+                    except:
+                        print("Invalid input. Please try again.")
+                new_name = input("Name: ")
+                new_email = input("Email: ")
+                while True:
+                    new_password = getpass.getpass("New Password: ")
+                    if new_password:
+                        new_password_check = getpass.getpass("Please enter the new password again: ")
+                        if new_password == new_password_check:
+                            break
+                        else:
+                            print("The second password differs from the first one. Please try again.")
+                    else:
+                        break
+
+                request = {
+                    "requestType": "update profile",
+                    "userID": user_id,
+                    "updated": {}
+                }
+                if new_name:
+                    request["updated"]["name"] = new_name
+                if new_email:
+                    request["updated"]["email"] = new_email
+                if new_password:
+                    request["updated"]["password"] = new_password
+
+                sendall(server_sock, request)
+                response = json.loads(recvall(server_sock, BUFFER_MAXLEN))
+
+                if response["status"] == "OK":
+                    print("Update OK. The updated profile is listed below:")
+                    print("Name:\t{}".format(response["userProfile"]["name"]))
+                    print("Email:\t{}".format(response["userProfile"]["email"]))
+                    press_enter_to_continue()
+                    return RETCODE_NORMAL
+                elif response["status"] == "FAIL":
+                    print("Update failed. Get the following error from the server: {}".format(response["errorMessage"]))
+                    press_enter_to_continue()
+                    return RETCODE_NORMAL
+                else:
+                    return RETCODE_ERROR
+            
+            case "c":
+                return RETCODE_NORMAL
+            
+            case "q":
+                request = {
+                    "requestType": "exit",
+                    "userID": user_state["userID"]
+                }
+                server_sock.send(json.dumps(request).encode('utf-8'))
+                return RETCODE_QUIT
+            case _:
+                print("Invalid option. Please try again.")
+
 def page_handle(server_sock: socket.socket, pages: list[str]) -> int:
     page_id = PAGE2ID[pages[-1]]
     match page_id:
@@ -711,6 +1043,8 @@ def page_handle(server_sock: socket.socket, pages: list[str]) -> int:
             return _user_dashboard_page(server_sock, pages)
         case 5:
             return _room_page(server_sock, pages)
+        case 6:
+            return _admin_page(server_sock, pages)
         case _:
             return RETCODE_ERROR
 

@@ -19,12 +19,20 @@ BUFFER_MAXLEN = 4096
 # Record all clients' sockets
 client_id2sock = {}
 
-# PostgreSQL connection
+# PostgreSQL connection settings
+PG_HOST = None 
+PG_PORT = None
+PG_USER = None
+PG_PASSWORD = None
+PG_DBNAME = None
+ISOLATION_LEVEL = 3
 
 REQUEST_MAP = {
+    # General functions
     "exit": 0,
     "sign in": 1,
     "sign up": 2,
+    # User functions
     "search games": 3,
     "add review": 4,
     "delete review": 5,
@@ -36,14 +44,19 @@ REQUEST_MAP = {
     "list rooms": 11,
     "check reviews": 12,
     "room communication": 13,
-    "leave room": 14
+    "leave room": 14,
+    # Admin functions
+    "add game": 15,
+    "update game": 16,
+    "delete game": 17,
+    "setup promotion": 18
 }
 
-def _user_exit(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
+def _exit(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     user_id = request["userID"]
     client_id2sock.pop(user_id)
 
-def _user_sign_in(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
+def _sign_in(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
         user_id = request["userID"]
         query = """
@@ -82,6 +95,8 @@ def _user_sign_in(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, cl
                 }
 
             client_id2sock[user_id] = client_sock
+
+        sendall(client_sock, response)
         
         pg_conn.commit()
     
@@ -92,10 +107,9 @@ def _user_sign_in(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, cl
             "status": "FAIL",
             "errorMessage": "Unknwon error"
         }
+        sendall(client_sock, response)
 
-    sendall(client_sock, response)
-
-def _user_sign_up(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
+def _sign_up(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
         user_name = request["userName"].replace("\'", "\'\'")
         email = request["email"].replace("\'", "\'\'")
@@ -122,6 +136,8 @@ def _user_sign_up(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, cl
             "userID": user_id
         }
 
+        sendall(client_sock, response)
+
         pg_conn.commit()
     
     except Exception as e:
@@ -131,8 +147,7 @@ def _user_sign_up(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, cl
             "status": "FAIL",
             "errorMessage": "Unknown error"
         }
-    
-    sendall(client_sock, response)
+        sendall(client_sock, response)
 
 def _user_search_games(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
@@ -178,14 +193,16 @@ def _user_search_games(pg_conn: psycopg.Connection, request: dict, cursor: Curso
                     "gameID": row["game_id"],
                     "gameName": row["game_name"],
                     "genres": [row["genre"]],
-                    "releaseDate": str(row["release_date"]),
-                    "totalAchievements": row["total_achievements"],
-                    "positiveRatings": row["positive_ratings"],
-                    "negativeRatings": row["negative_ratings"]
+                    "releaseDate": str(row["release_date"]) if row["release_date"] is not None else "",
+                    "totalAchievements": row["total_achievements"] if row["total_achievements"] is not None else "",
+                    "positiveRatings": row["positive_ratings"] if row["positive_ratings"] is not None else "",
+                    "negativeRatings": row["negative_ratings"] if row["negative_ratings"] is not None else ""
                 })
                 gameid2idx[row["game_id"]] = len(response["data"]) - 1
             else:
                 response["data"][idx]["genres"].append(row["genre"])
+
+        sendall(client_sock, response)
 
         pg_conn.commit()
     
@@ -196,9 +213,8 @@ def _user_search_games(pg_conn: psycopg.Connection, request: dict, cursor: Curso
             "status": "FAIL",
             "errorMessage": "Unknown error"
         }
+        sendall(client_sock, response)
     
-    sendall(client_sock, response)
-
 def _user_add_reviews(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
         user_id = request["userID"]
@@ -219,8 +235,7 @@ def _user_add_reviews(pg_conn: psycopg.Connection, request: dict, cursor: Cursor
                 "status": "FAIL",
                 "errorMessage": "You already review on the game."
             }
-
-            pg_conn.rollback()
+        
         else:
             current_time = str(datetime.datetime.now().replace(microsecond = 0))
             query = """
@@ -233,7 +248,9 @@ def _user_add_reviews(pg_conn: psycopg.Connection, request: dict, cursor: Cursor
                 "status": "OK"
             }
 
-            pg_conn.commit()
+        sendall(client_sock, response)
+        
+        pg_conn.commit()
 
     except Exception as e:
         pg_conn.rollback()
@@ -242,9 +259,8 @@ def _user_add_reviews(pg_conn: psycopg.Connection, request: dict, cursor: Cursor
             "status": "FAIL",
             "errorMessage": "Unknwon error"
         }
+        sendall(client_sock, response)
         
-    sendall(client_sock, response)
-
 def _user_delete_reviews(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
         user_id = request["userID"]
@@ -260,6 +276,8 @@ def _user_delete_reviews(pg_conn: psycopg.Connection, request: dict, cursor: Cur
             "status": "OK"
         }
 
+        sendall(client_sock, response)
+
         pg_conn.commit()
 
     except Exception as e:
@@ -269,8 +287,7 @@ def _user_delete_reviews(pg_conn: psycopg.Connection, request: dict, cursor: Cur
             "status": "FAIL",
             "errorMessage": "Unknown error"
         }
-
-    sendall(client_sock, response)
+        sendall(client_sock, response)
 
 def _user_add_to_favorites(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
@@ -295,8 +312,6 @@ def _user_add_to_favorites(pg_conn: psycopg.Connection, request: dict, cursor: C
             response = {
                 "status": "OK"
             }
-
-            pg_conn.commit()
         
         else:
             response = {
@@ -304,7 +319,9 @@ def _user_add_to_favorites(pg_conn: psycopg.Connection, request: dict, cursor: C
                 "errorMessage": "The game is in your favorites already"
             }
 
-            pg_conn.rollback()
+        sendall(client_sock, response)
+
+        pg_conn.commit()
          
     except Exception as e:
         pg_conn.rollback()
@@ -313,8 +330,7 @@ def _user_add_to_favorites(pg_conn: psycopg.Connection, request: dict, cursor: C
             "status": "FAIL",
             "errorMessage": "Unknown error"
         }
-
-    sendall(client_sock, response)
+        sendall(client_sock, response)
 
 def _user_create_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
@@ -351,13 +367,16 @@ def _user_create_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor
                 "roomID": room_id,
                 "gameName": game_name
             }
-            pg_conn.commit()
+
         else:
             response = {
                 "status": "FAIL",
                 "errorMessage": "Game not found."
             }
-            pg_conn.rollback()
+
+        sendall(client_sock, response)
+
+        pg_conn.commit()
 
     except Exception as e:
         pg_conn.rollback()
@@ -366,8 +385,7 @@ def _user_create_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor
             "status": "FAIL",
             "errorMessage": "Unknown error"
         }
-
-    sendall(client_sock, response)
+        sendall(client_sock, response)
 
 def _user_join_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
@@ -378,12 +396,20 @@ def _user_join_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, 
         query = """
                 SELECT "status"
                 FROM "room"
-                WHERE "room_id" = {}
+                WHERE "room_id" = {};
                 """.format(room_id)
         cursor.execute(query)
-        status = cursor.fetchone()["status"]
+        row = cursor.fetchone()
 
-        if status == "Active":
+        room_found = row and row["status"] == "Active"
+        if not room_found:
+            response = {
+                "status": "FAIL",
+                "errorMessage": "Room not found"
+            }
+        
+        else:
+            room_found = True
             query = """
                     SELECT "user_id", "room_id"
                     FROM "user_in_room"
@@ -447,18 +473,15 @@ def _user_join_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, 
                     WHERE "room_id" = {};
                     """.format(room_id)
             cursor.execute(query)
-            rows = cursor.fetchall()
+            users_in_room = cursor.fetchall()
 
-            pg_conn.commit()
+        sendall(client_sock, response)
+        if room_found:
+            for user in users_in_room:
+                if user["user_id"] != user_id and not user["leave_time"]:
+                    sendall(client_id2sock[user["user_id"]], response_broadcast)
 
-        elif status == "Closed":
-            response = {
-                "status": "FAIL",
-                "errorMessage": "Room not found"
-            }
-
-        else:
-            raise Exception("Room has invalid status value.")
+        pg_conn.commit()
 
     except Exception as e:
         pg_conn.rollback()
@@ -467,11 +490,7 @@ def _user_join_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, 
             "status": "FAIL",
             "errorMessage": "Unknown error"
         }
-
-    sendall(client_sock, response)
-    for row in rows:
-        if row["user_id"] != user_id and not row["leave_time"]:
-            sendall(client_id2sock[row["user_id"]], response_broadcast)
+        sendall(client_sock, response)
 
 def _user_check_user(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
@@ -519,13 +538,18 @@ def _user_check_user(pg_conn: psycopg.Connection, request: dict, cursor: Cursor,
                 "errorMessage": "User not found"
             }
 
+        sendall(client_sock, response)
+
         pg_conn.commit()
 
     except Exception as e:
         pg_conn.rollback()
         print("[Error] {}".format(e))
-
-    sendall(client_sock, response)
+        response = {
+            "status": "FAIL",
+            "errorMessage": "Unknwon error"
+        }
+        sendall(client_sock, response)
 
 def _user_update_profile(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     user_id = request["userID"]
@@ -551,6 +575,8 @@ def _user_update_profile(pg_conn: psycopg.Connection, request: dict, cursor: Cur
             "status": "FAIL",
             "errorMessage": "Nothing to do"
         }
+        sendall(client_sock, response)
+    
     else:
         try:
             query = query.format(", ".join(updates))
@@ -573,6 +599,8 @@ def _user_update_profile(pg_conn: psycopg.Connection, request: dict, cursor: Cur
                 }
             }
 
+            sendall(client_sock, response)
+
             pg_conn.commit()
             
         except Exception as e:
@@ -582,8 +610,7 @@ def _user_update_profile(pg_conn: psycopg.Connection, request: dict, cursor: Cur
                 "status": "FAIL",
                 "errorMessage": "Unknown error"
             }
-
-    sendall(client_sock, response)
+            sendall(client_sock, response)
 
 def _user_list_rooms(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
@@ -613,6 +640,8 @@ def _user_list_rooms(pg_conn: psycopg.Connection, request: dict, cursor: Cursor,
                 "hostName": row["user_name"]
             })
 
+        sendall(client_sock, response)
+
         pg_conn.commit()
     
     except Exception as e:
@@ -622,8 +651,7 @@ def _user_list_rooms(pg_conn: psycopg.Connection, request: dict, cursor: Cursor,
             "status": "FAIL",
             "errorMessage": "Unknwon error"
         }
-
-    sendall(client_sock, response)
+        sendall(client_sock, response)
 
 def _user_check_reviews(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
@@ -653,6 +681,8 @@ def _user_check_reviews(pg_conn: psycopg.Connection, request: dict, cursor: Curs
                 "reviewRating": row["rating"]
             })
 
+        sendall(client_sock, response)
+
         pg_conn.commit()
 
     except Exception as e:
@@ -662,9 +692,8 @@ def _user_check_reviews(pg_conn: psycopg.Connection, request: dict, cursor: Curs
             "status": "FAIL",
             "errorMessage": "Unknown error"
         }
+        sendall(client_sock, response)
     
-    sendall(client_sock, response)
-
 def _user_room_communication(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
         room_id = request["roomID"]
@@ -699,7 +728,12 @@ def _user_room_communication(pg_conn: psycopg.Connection, request: dict, cursor:
                 WHERE "room_id" = {};
                 """.format(room_id)
         cursor.execute(query)
-        rows = cursor.fetchall()
+        users_in_room = cursor.fetchall()
+
+        sendall(client_sock, response_sender)
+        for user in users_in_room:
+            if user["user_id"] != sender_id and not user["leave_time"]:
+                sendall(client_id2sock[user["user_id"]], response_broadcast)
 
         pg_conn.commit()
 
@@ -711,12 +745,6 @@ def _user_room_communication(pg_conn: psycopg.Connection, request: dict, cursor:
             "errorMessage": "Unknown error"
         }
         sendall(client_sock, response)
-        return
-
-    sendall(client_sock, response_sender)
-    for row in rows:
-        if row["user_id"] != sender_id and not row["leave_time"]:
-            sendall(client_id2sock[row["user_id"]], response_broadcast)
 
 def _user_leave_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
@@ -765,7 +793,7 @@ def _user_leave_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor,
                 WHERE "room_id" = {};
                 """.format(room_id)
         cursor.execute(query)
-        rows = cursor.fetchall()
+        user_in_rooms = cursor.fetchall()
         
         if room_host_id == user_id:
             response_broadcast2 = {
@@ -782,6 +810,14 @@ def _user_leave_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor,
                     """.format(end_time, room_id)
             cursor.execute(query)
 
+        sendall(client_sock, response)
+        for user in user_in_rooms:
+            if user["user_id"] != user_id and not user["leave_time"]:
+                if room_host_id == user_id:
+                    sendall(client_id2sock[user["user_id"]], response_broadcast2)
+                else:
+                    sendall(client_id2sock[user["user_id"]], response_broadcast1)
+
         pg_conn.commit()
 
     except Exception as e:
@@ -791,25 +827,217 @@ def _user_leave_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor,
             "status": "FAIL",
             "errorMessage": "Unknown error"
         }
+        sendall(client_sock, response)
 
-    sendall(client_sock, response)
-    for row in rows:
-        if row["user_id"] != user_id and not row["leave_time"]:
-            if room_host_id == user_id:
-                sendall(client_id2sock[row["user_id"]], response_broadcast2)
-            else:
-                sendall(client_id2sock[row["user_id"]], response_broadcast1)
+def _admin_add_game(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
+    try:
+        game_name = request["gameName"].replace("\'", "\'\'")
+        genres = request.get("genres")
+        release_date = request["releaseDate"]
+        price = request.get("price")
+        total_achievements = request.get("totalAchievements")
+        positive_ratings = request.get("positiveRatings")
+        negative_ratings = request.get("negativeRatings")
+
+        query = """
+                INSERT INTO "game" ({})
+                VALUES ({})
+                RETURNING "game_id";
+                """
+        columns = ["\"game_name\"", "\"release_date\""]
+        values = ["\'{}\'".format(game_name), "\'{}\'".format(release_date)]
+        if price:
+            columns.append("\"price\"")
+            values.append(str(price))
+        if total_achievements:
+            columns.append("\"total_achievements\"")
+            values.append(str(total_achievements))
+        if positive_ratings:
+            columns.append("\"positive_ratings\"")
+            values.append(str(positive_ratings))
+        if negative_ratings:
+            columns.append("\"negative_ratings\"")
+            values.append(str(negative_ratings))
+        query = query.format(", ".join(columns), ", ".join(values))
+        cursor.execute(query)
+        game_id = cursor.fetchone()["game_id"]
+
+        if genres:
+            query = """
+                    INSERT INTO "game_genre" ("game_id", "genre")
+                    """
+            value_statements = []
+            for genre in genres:
+                value_statements.append("VALUES ({}, \'{}\')".format(game_id, genre))
+            query += "\n".join(value_statements) + ";"
+            cursor.execute(query)
+        
+        else:
+            query = """
+                    INSERT INTO "game_genre" ("game_id", "genre")
+                    VALUES ({}, 'Unknown')
+                    """.format(game_id)
+            cursor.execute(query)
+
+        response = {
+            "status": "OK",
+            "gameID": game_id
+        }
+
+        sendall(client_sock, response)
+
+        pg_conn.commit()
+    
+    except Exception as e:
+        pg_conn.rollback()
+        print("[Error] {}".format(e))
+        response = {
+            "status": "FAIL",
+            "errorMessage": "Unknown error"
+        }
+        sendall(client_sock, response)
+
+def _admin_update_game(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
+    try:
+        game_id = request["gameID"]
+        genres = request.get("genres")
+        price = request.get("price")
+        total_achievements = request.get("totalAchievements")
+        positive_ratings = request.get("positiveRatings")
+        negative_ratings = request.get("negativeRatings")
+
+        query = """
+                SELECT COUNT(*)
+                FROM "game"
+                WHERE "game_id" = {};
+                """.format(game_id)
+        cursor.execute(query)
+        game_found = cursor.fetchone()["count"]
+
+        if game_found:
+            query = """
+                    UPDATE "game"
+                    SET {{}}
+                    WHERE "game_id" = {};
+                    """.format(game_id)
+            updates = []
+            if price:
+                updates.append("\"price\" = {}".format(price))
+            if total_achievements:
+                updates.append("\"total_achievements\" = {}".format(total_achievements))
+            if positive_ratings:
+                updates.append("\"positive_ratings\" = {}".format(positive_ratings))
+            if negative_ratings:
+                updates.append("\"negative_ratings\" = {}".format(negative_ratings))
+            if updates:
+                query = query.format(", ".join(updates))
+                cursor.execute(query)
+
+            if genres:
+                query = """
+                        DELETE FROM "game_genre"
+                        WHERE "game_id" = {};
+                        """.format(game_id)
+                cursor.execute(query)
+
+                query = """
+                        INSERT INTO "game_genre" ("game_id", "genre")
+                        VALUES """
+                values = []
+                for genre in genres:
+                    values.append("({}, \'{}\')".format(game_id, genre))
+                query += " ".join(values) + ";"
+                cursor.execute(query)
+
+            response = {
+                "status": "OK"
+            }
+
+        else:
+            response = {
+                "status": "FAIL",
+                "errorMessage": "Game not found"
+            }
+
+        sendall(client_sock, response)
+
+        pg_conn.commit()
+    
+    except Exception as e:
+        pg_conn.rollback()
+        print("[Error] {}".format(e))
+        response = {
+            "status": "FAIL",
+            "errorMessage": "Unknown error"
+        }
+        sendall(client_sock, response)
+
+def _admin_delete_game(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
+    try:
+        game_id = request["gameID"]
+
+        query = """
+                DELETE FROM "game"
+                WHERE "game_id" = {};
+                """.format(game_id)
+        cursor.execute(query)
+
+        response = {
+            "status": "OK"
+        }
+
+        sendall(client_sock, response)
+
+        pg_conn.commit()
+
+    except Exception as e:
+        pg_conn.rollback()
+        print("[Error] {}".format(e))
+        response = {
+            "status": "FAIL",
+            "errorMessage": "Unknown error"
+        }
+        sendall(client_sock, response)
+
+def _admin_setup_promotion(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
+    try:
+        start_date = request["startDate"]
+        end_date = request["endDate"]
+        discount_rate = request["discountRate"]
+
+        query = """
+                INSERT INTO "promotion" ("start_date", "end_date", "discount_rate")
+                VALUES ('{}', '{}', {});
+                """.format(start_date, end_date, discount_rate)
+        cursor.execute(query)
+
+        response = {
+            "status": "OK"
+        }
+
+        sendall(client_sock, response)
+
+        pg_conn.commit()
+
+    except Exception as e:
+        pg_conn.rollback()
+        print("[Error] {}".format(e))
+        response = {
+            "status": "FAIL",
+            "errorMessage": "Unknown error"
+        }
+        sendall(client_sock, response)
 
 def handle_request(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket) -> int:
     request_id = REQUEST_MAP[request["requestType"]]
     match request_id:
         case 0:
-            _user_exit(pg_conn, request, cursor, client_sock)
+            _exit(pg_conn, request, cursor, client_sock)
             return RETCODE_EXIT
         case 1:
-            _user_sign_in(pg_conn, request, cursor, client_sock)
+            _sign_in(pg_conn, request, cursor, client_sock)
         case 2:
-            _user_sign_up(pg_conn, request, cursor, client_sock)
+            _sign_up(pg_conn, request, cursor, client_sock)
         case 3:
             _user_search_games(pg_conn, request, cursor, client_sock)
         case 4:
@@ -834,6 +1062,14 @@ def handle_request(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, c
             _user_room_communication(pg_conn, request, cursor, client_sock)
         case 14:
             _user_leave_room(pg_conn, request, cursor, client_sock)
+        case 15:
+            _admin_add_game(pg_conn, request, cursor, client_sock)
+        case 16:
+            _admin_update_game(pg_conn, request, cursor, client_sock)
+        case 17:
+            _admin_delete_game(pg_conn, request, cursor, client_sock)
+        case 18:
+            _admin_setup_promotion(pg_conn, request, cursor, client_sock)
         case _:
            return RETCODE_ERROR
 
@@ -842,24 +1078,25 @@ def handle_request(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, c
 def handle_client(client_sock: socket.socket, client_addr):
     try:
         pg_conn = psycopg.connect(
-            host = "localhost",
-            port = 5432,
-            user = "postgres",
-            password = "postgres",
-            dbname = "Steam-Together-fortest"
+            host = PG_HOST,
+            port = PG_PORT,
+            user = PG_USER,
+            password = PG_PASSWORD,
+            dbname = PG_DBNAME
         )
+        pg_conn.set_isolation_level(ISOLATION_LEVEL)
         cursor = pg_conn.cursor(row_factory = dict_row)
         while True:
-            recv_data = client_sock.recv(BUFFER_MAXLEN)
-            if len(recv_data) > 0:
-                request = json.loads(recv_data)
+            request_str = client_sock.recv(BUFFER_MAXLEN).decode("utf-8")
+            if request_str:
+                request = json.loads(request_str)
                 retcode = handle_request(pg_conn, request, cursor, client_sock)
-            if retcode == RETCODE_ERROR:
-                print("[Error] Failed to handle the request. Abort the client connection.")
-                break
-            elif retcode == RETCODE_EXIT:
-                print("[Log] Client at {}:{} exited.".format(client_addr[0], client_addr[1]))
-                break
+                if retcode == RETCODE_ERROR:
+                    print("[Error] Failed to handle the request. Abort the client connection.")
+                    break
+                elif retcode == RETCODE_EXIT:
+                    print("[Log] Client at {}:{} exited.".format(client_addr[0], client_addr[1]))
+                    break
 
     finally:
         client_sock.close()
@@ -868,13 +1105,25 @@ def handle_client(client_sock: socket.socket, client_addr):
         exit(0)
 
 def main(args):
+    global PG_HOST
+    global PG_PORT
+    global PG_USER
+    global PG_PASSWORD
+    global PG_DBNAME
+
+    PG_HOST = args.pg_host
+    PG_PORT = args.pg_port
+    PG_USER = args.pg_user
+    PG_PASSWORD = args.pg_password
+    PG_DBNAME = args.pg_dbname
+
     host = "127.0.0.1"
     port = args.port
     
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind((host, port))
-    sock.listen(8)
+    sock.listen(5)
 
     clear_screen()
     print("Listening at port {}".format(port))
@@ -895,6 +1144,11 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-p", "--port", type = int, help = "Specify the port to listen on. (default = 8888)", default = 8888)
+    parser.add_argument("--port", type = int, help = "The port for the server to listen on. (default = 8888)", default = 8888)
+    parser.add_argument("--pg_host", type = str, help = "Host IP of the PostgreSQL server. (default = \"localhost\")", default = "localhost")
+    parser.add_argument("--pg_port", type = int, help = "Port of the PostgreSQL server. (default = 5432)", default = 5432)
+    parser.add_argument("--pg_user", type = str, help = "User to login PostgreSQL server. (default = postgres)", default = "postgres")
+    parser.add_argument("--pg_password", type = str, help = "Password for login the PostgreSQL server. (default = \"postgres\")", default = "postgres")
+    parser.add_argument("--pg_dbname", type = str, help = "Database to connect. (default = \"Steam-Together-fortest\")", default = "Steam-Together-fortest")
     args = parser.parse_args()
     main(args)
