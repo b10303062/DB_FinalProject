@@ -400,7 +400,7 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                     except:
                         print("Invalid input. Please try again.")
                 while True:
-                    max_members = input("Determine the maxmum members for the room (Press ENTER if you want to skip this. Default is 10): ")
+                    max_members = input("Determine the maximum members for the room (Press ENTER if you want to skip this. Default is 10): ")
                     if max_members:
                         try:
                             max_members = int(max_members)
