@@ -29,8 +29,6 @@ PG_PASSWORD = None
 PG_DBNAME = None
 ISOLATION_LEVEL = 3
 
-ROOM_MEMBER_MAX = 10
-
 REQUEST_MAP = {
     # General functions
     "exit": 0,
@@ -341,13 +339,14 @@ def _user_create_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor
         user_id = request["userID"]
         room_name = request["roomName"].replace("\'", "\'\'")
         game_id = request["gameID"]
+        max_members = request["roomNumMembersLimit"] 
         start_datetime = str(datetime.datetime.now().replace(microsecond=0))
 
         query = """
-                INSERT INTO "room" ("creator_id", "room_name", "game_id", "start_time", "status")
-                VALUES ({}, '{}', {}, '{}', '{}')
+                INSERT INTO "room" ("creator_id", "room_name", "game_id", "start_time", "status", "max_players")
+                VALUES ({}, '{}', {}, '{}', '{}', {})
                 RETURNING "room_id";
-                """.format(user_id, room_name, game_id, start_datetime, "Active")
+                """.format(user_id, room_name, game_id, start_datetime, "Active", max_members)
         cursor.execute(query)
         room_id = cursor.fetchone()["room_id"]
 
@@ -369,8 +368,7 @@ def _user_create_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor
             response = {
                 "status": "OK",
                 "roomID": room_id,
-                "gameName": game_name,
-                "roomNumMembersLimit": ROOM_MEMBER_MAX
+                "gameName": game_name
             }
 
         else:
@@ -396,13 +394,12 @@ def _user_join_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, 
     join_room_lock.acquire()
 
     try:
-
         user_id = request["userID"]
         room_id = request["roomID"]
         join_time = str(datetime.datetime.now().replace(microsecond=0))
 
         query = """
-                SELECT "status"
+                SELECT "status", "max_players"
                 FROM "room"
                 WHERE "room_id" = {};
                 """.format(room_id)
@@ -419,6 +416,7 @@ def _user_join_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, 
         
         else:
             room_found = True
+            max_members = row["max_players"]
             
             query = """
                     SELECT COUNT(*)
@@ -428,7 +426,7 @@ def _user_join_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, 
             cursor.execute(query)
             n_members = cursor.fetchone()["count"]
 
-            if n_members < ROOM_MEMBER_MAX:
+            if n_members < max_members:
                 query = """
                         SELECT "user_id", "room_id"
                         FROM "user_in_room"
@@ -451,7 +449,7 @@ def _user_join_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, 
                 cursor.execute(query)
 
                 query = """
-                        SELECT "r"."room_name", "u"."user_name", "g"."game_name"
+                        SELECT "r"."room_name", "r"."max_players", "u"."user_name", "g"."game_name"
                         FROM "room" AS "r"
                             JOIN "user" AS "u" ON "u"."user_id" = "r"."creator_id"
                             JOIN "game" AS "g" ON "g"."game_id" = "r"."game_id"
@@ -460,6 +458,7 @@ def _user_join_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, 
                 cursor.execute(query)
                 row =  cursor.fetchone()
                 room_name = row["room_name"]
+                max_members = row["max_players"]
                 room_host = row["user_name"]
                 game_name = row["game_name"]
 
@@ -476,7 +475,7 @@ def _user_join_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, 
                     "roomName": room_name,
                     "roomHost": room_host,
                     "roomNumMembers": len(users_in_room),
-                    "roomNumMembersLimit": ROOM_MEMBER_MAX,
+                    "roomNumMembersLimit": max_members,
                     "gameName": game_name
                 }
 

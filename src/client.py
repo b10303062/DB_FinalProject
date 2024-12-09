@@ -385,17 +385,27 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[tuple]) -> int:
             case "4": # Create a room
                 room_name = input("The name of your room: ")
                 while True:
-                    game_id = input("Determine the game you want to play and input the game id: ")
                     try:
-                        game_id = int(game_id)
+                        game_id = int(input("Determine the game you want to play and input the game id: "))
                         break
                     except:
                         print("Invalid input. Please try again.")
-
+                while True:
+                    max_members = input("Determine the maxmum members for the room (Press ENTER if you want to skip this. Default is 10): ")
+                    if max_members:
+                        try:
+                            max_members = int(max_members)
+                            break
+                        except:
+                            print("Invalid input. Please try again.")
+                    else:
+                        max_members = 10
+                        break
                 request = {
                     "requestType": "create room",
                     "userID": user_state["userID"],
                     "roomName": room_name,
+                    "roomNumMembersLimit": max_members,
                     "gameID": game_id
                 }
 
@@ -409,7 +419,7 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                     user_state["roomName"] = room_name
                     user_state["roomHost"] = user_state["userName"]
                     user_state["roomNumMembers"] = 1
-                    user_state["roomNumMembersLimit"] = response["roomNumMembersLimit"]
+                    user_state["roomNumMembersLimit"] = max_members
                     room_page = \
 """{:=^{width}}
 {}{: ^{width}}{}
