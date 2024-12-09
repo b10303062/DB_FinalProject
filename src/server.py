@@ -247,8 +247,33 @@ def _user_add_reviews(pg_conn: psycopg.Connection, request: dict, cursor: Cursor
             cursor.execute(query)
 
             response = {
-                "status": "OK"
+                "status": "OK"            
             }
+
+            if review_rating >= 4:
+                query = """
+                        SELECT "genre"
+                        FROM "game_genre"
+                        WHERE "game_id" = {};
+                        """.format(game_id)
+                cursor.execute(query)
+                genres = [row["genre"] for row in cursor.fetchall()]
+                if genres:
+                    query = """
+                            SELECT g."game_id", g."game_name", g."positive_ratings"
+                            FROM "game" g
+                            JOIN "game_genre" gg ON g."game_id" = gg."game_id"
+                            WHERE gg."genre" IN ('{}') AND g."game_id" != {}
+                            GROUP BY g."game_id"
+                            ORDER BY g."positive_ratings" DESC
+                            LIMIT 5;
+                            """.format("','".join(genres), game_id)
+                    cursor.execute(query)
+                    recommendations = cursor.fetchall()
+                    response["recommendations"] = [
+                        {"gameID": row["game_id"], "gameName": row["game_name"], "positiveRatings": row["positive_ratings"]}
+                        for row in recommendations
+                    ]
 
         sendall(client_sock, response)
         
