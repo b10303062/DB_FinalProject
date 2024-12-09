@@ -1209,7 +1209,7 @@ if __name__ == "__main__":
     parser.add_argument("--port", type = int, help = "The port for the server to listen on. (default = 8888)", default = 8888)
     parser.add_argument("--pg_host", type = str, help = "Host IP of the PostgreSQL server. (default = \"localhost\")", default = "localhost")
     parser.add_argument("--pg_port", type = int, help = "Port of the PostgreSQL server. (default = 5432)", default = 5432)
-    parser.add_argument("--pg_user", type = str, help = "User to login PostgreSQL server. (default = postgres)", default = "postgres")
+    parser.add_argument("--pg_user", type = str, help = "User to login PostgreSQL server. (default = \"postgres\")", default = "postgres")
     parser.add_argument("--pg_password", type = str, help = "Password for login the PostgreSQL server. (default = \"postgres\")", default = "postgres")
     parser.add_argument("--pg_dbname", type = str, help = "Database to connect. (default = \"Steam-Together-fortest\")", default = "Steam-Together-fortest")
     args = parser.parse_args()
