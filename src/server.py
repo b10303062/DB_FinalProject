@@ -96,7 +96,13 @@ def _sign_in(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_
                     "errorMessage": "Authentication failed"
                 }
 
-            client_id2sock[user_id] = client_sock
+            if not client_id2sock.get(user_id):
+                client_id2sock[user_id] = client_sock
+            else:
+                response = {
+                    "status": "FAIL",
+                    "errorMessage": "You have already signed in somewhere."
+                }
 
         sendall(client_sock, response)
         

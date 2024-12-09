@@ -101,11 +101,13 @@ PAGETYPE_ADMIN = 6
 user_state = {
     "userID": -1,
     "userName": "",
-    "roomID": -1,
-    "roomName": "",
-    "roomHost": "",
-    "roomNumMembers": -1,
-    "roomNumMembersLimit": -1
+    "room": {
+        "roomID": -1,
+        "roomName": "",
+        "roomHost": "",
+        "roomNumMembers": -1,
+        "roomNumMembersLimit": -1
+    }
 }
 
 def _init_page(server_sock: socket.socket, pages: list[tuple]) -> int:
@@ -424,11 +426,11 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                 if response["status"] == "OK":
                     room_id = response["roomID"]
                     game_name = response["gameName"]
-                    user_state["roomID"] = room_id
-                    user_state["roomName"] = room_name
-                    user_state["roomHost"] = user_state["userName"]
-                    user_state["roomNumMembers"] = 1
-                    user_state["roomNumMembersLimit"] = max_members
+                    user_state["room"]["roomID"] = room_id
+                    user_state["room"]["roomName"] = room_name
+                    user_state["room"]["roomHost"] = user_state["userName"]
+                    user_state["room"]["roomNumMembers"] = 1
+                    user_state["room"]["roomNumMembersLimit"] = max_members
                     room_page = \
 """{:=^{width}}
 {}{: ^{width}}{}
@@ -438,7 +440,7 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[tuple]) -> int:
 {:=^{width}}
 {: ^{width}}
 {:=^{width}}
-""".format("", STYLE_BOLD, room_name, STYLE_DEFAULT, "ID: {}".format(room_id), "", "Play Game: {}".format(game_name), "", "Host: {}".format(user_state["roomHost"]), "", width = shutil.get_terminal_size()[0])
+""".format("", STYLE_BOLD, room_name, STYLE_DEFAULT, "ID: {}".format(room_id), "", "Play Game: {}".format(game_name), "", "Host: {}".format(user_state["room"]["roomHost"]), "", width = shutil.get_terminal_size()[0])
                     pages.append((PAGETYPE_ROOM, room_page))
                     return RETCODE_NORMAL
                 elif response["status"] == "FAIL":
@@ -467,14 +469,14 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                 response = json.loads(recvall(server_sock, BUFFER_MAXLEN))
 
                 if response["status"] == "OK":
-                    user_state["roomID"] = room_id
+                    user_state["room"]["roomID"] = room_id
                     room_name = response["roomName"]
                     room_host = response["roomHost"]
                     game_name = response["gameName"]
-                    user_state["roomNumMembers"] = response["roomNumMembers"]
-                    user_state["roomNumMembersLimit"] = response["roomNumMembersLimit"]
-                    user_state["roomName"] = room_name
-                    user_state["roomHost"] = room_host
+                    user_state["room"]["roomNumMembers"] = response["roomNumMembers"]
+                    user_state["room"]["roomNumMembersLimit"] = response["roomNumMembersLimit"]
+                    user_state["room"]["roomName"] = room_name
+                    user_state["room"]["roomHost"] = room_host
                     room_page = \
 """{:=^{width}}
 {}{: ^{width}}{}
@@ -484,7 +486,7 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[tuple]) -> int:
 {:=^{width}}
 {: ^{width}}
 {:=^{width}}
-""".format("", STYLE_BOLD, room_name, STYLE_DEFAULT, "ID: {}".format(room_id), "", "Play Game: {}".format(game_name), "", "Host: {}".format(user_state["roomHost"]), "", width = shutil.get_terminal_size()[0])
+""".format("", STYLE_BOLD, room_name, STYLE_DEFAULT, "ID: {}".format(room_id), "", "Play Game: {}".format(game_name), "", "Host: {}".format(user_state["room"]["roomHost"]), "", width = shutil.get_terminal_size()[0])
                     pages.append((PAGETYPE_ROOM, room_page))
                     return RETCODE_NORMAL
                 elif response["status"] == "FAIL":
@@ -705,8 +707,8 @@ def _room_page(server_sock: socket.socket, pages: list[tuple]) -> int:
     rlist = [sys.stdin, server_sock]
     leave = False
     close = False
-    n_members = user_state["roomNumMembers"]
-    n_members_max = user_state["roomNumMembersLimit"]
+    n_members = user_state["room"]["roomNumMembers"]
+    n_members_max = user_state["room"]["roomNumMembersLimit"]
     while not leave and not close:
         clear_screen()
         print(pages[-1][1], end = "")
@@ -731,7 +733,7 @@ def _room_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                     else:
                         request = {
                             "requestType": "room communication",
-                            "roomID": user_state["roomID"],
+                            "roomID": user_state["room"]["roomID"],
                             "fromUserID": user_state["userID"],
                             "timestamp": str(datetime.datetime.now().replace(microsecond=0)),
                             "content": line
@@ -762,7 +764,7 @@ def _room_page(server_sock: socket.socket, pages: list[tuple]) -> int:
         request = {
             "requestType": "leave room",
             "userID": user_state["userID"],
-            "roomID": user_state["roomID"]
+            "roomID": user_state["room"]["roomID"]
         }
         sendall(server_sock, request)
         response = json.loads(recvall(server_sock, BUFFER_MAXLEN))
