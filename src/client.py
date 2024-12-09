@@ -90,14 +90,12 @@ Please choose from the below options:
 [q] Quit
 """.format(PAGE_HEADER.format("Admin Dashboard"))
 
-PAGE2ID = {
-    PAGE_INITIALIZE: 1,
-    PAGE_SIGN_IN: 2,
-    PAGE_SIGN_UP: 3,
-    PAGE_USER_DASHBOARD: 4,
-    PAGE_ROOM: 5,
-    PAGE_ADMIN: 6
-}
+PAGETYPE_INITIALIZE = 1
+PAGETYPE_SIGN_IN = 2
+PAGETYPE_SIGN_UP = 3
+PAGETYPE_USER_DASHBOARD = 4
+PAGETYPE_ROOM = 5
+PAGETYPE_ADMIN = 6
 
 # Record info for login user
 user_state = {
@@ -105,18 +103,19 @@ user_state = {
     "userName": "",
     "roomID": -1,
     "roomName": "",
-    "roomHost": ""
+    "roomHost": "",
+    "roomNumMembers": -1
 }
 
-def _init_page(server_sock: socket.socket, pages: list[str]) -> int:
+def _init_page(server_sock: socket.socket, pages: list[tuple]) -> int:
     while True:
         command_prompt()
         opt = input()
         if opt == "1":
-            pages.append(PAGE_SIGN_IN)
+            pages.append((PAGETYPE_SIGN_IN, PAGE_SIGN_IN))
             return RETCODE_NORMAL
         elif opt == "2":
-            pages.append(PAGE_SIGN_UP)
+            pages.append((PAGETYPE_SIGN_UP, PAGE_SIGN_UP))
             return RETCODE_NORMAL
         elif opt == "q":
             request = {
@@ -128,7 +127,7 @@ def _init_page(server_sock: socket.socket, pages: list[str]) -> int:
         else:
             print("Invalid option id. Please enter again.")
 
-def _sign_in_page(server_sock: socket.socket, pages: list[str]) -> int:
+def _sign_in_page(server_sock: socket.socket, pages: list[tuple]) -> int:
     while True:
         user_id = input("User ID: ")
         try:
@@ -150,22 +149,22 @@ def _sign_in_page(server_sock: socket.socket, pages: list[str]) -> int:
         print("Sign in ok.")
         press_enter_to_continue()
         if response["role"] == "User":
-            pages.append(PAGE_USER_DASHBOARD)
+            pages.append((PAGETYPE_USER_DASHBOARD, PAGE_USER_DASHBOARD))
             return RETCODE_NORMAL
         elif response["role"] == "Business Operator":
-            pages.append(PAGE_ADMIN)
+            pages.append((PAGETYPE_ADMIN, PAGE_ADMIN))
             return RETCODE_NORMAL
         else:
             return RETCODE_ERROR
     elif response["status"] == "FAIL":
         print("Sign in failed. Get the following error from the server: {}".format(response["errorMessage"]))
         press_enter_to_continue()
-        pages.append(PAGE_INITIALIZE)
+        pages.append((PAGETYPE_INITIALIZE, PAGE_INITIALIZE))
         return RETCODE_NORMAL
     else:
         return RETCODE_ERROR
         
-def _sign_up_page(server_sock: socket.socket, pages: list[str]) -> int:
+def _sign_up_page(server_sock: socket.socket, pages: list[tuple]) -> int:
     user_name = input("User name: ")
     email = input("Email: ")
     while True:
@@ -196,19 +195,19 @@ def _sign_up_page(server_sock: socket.socket, pages: list[str]) -> int:
         print("Sign up OK.")
         print("Your user id is {}. Please remember it since you need it to sign in.".format(response["userID"]))
         press_enter_to_continue()
-        pages.append(PAGE_INITIALIZE)
+        pages.append((PAGETYPE_INITIALIZE, PAGE_INITIALIZE))
         return RETCODE_NORMAL
     
     elif response["status"] == "FAIL":
         print("Sign up failed. Get the following error from server: {}".format(response["errorMessage"]))
         press_enter_to_continue()
-        pages.append(PAGE_INITIALIZE)
+        pages.append((PAGETYPE_INITIALIZE, PAGE_INITIALIZE))
         return RETCODE_NORMAL
     
     else:
         return RETCODE_ERROR
 
-def _user_dashboard_page(server_sock: socket.socket, pages: list[str]) -> int:
+def _user_dashboard_page(server_sock: socket.socket, pages: list[tuple]) -> int:
     while True:
         command_prompt(user_state["userName"])
         opt = input()
@@ -393,8 +392,7 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[str]) -> int:
                     user_state["roomID"] = room_id
                     user_state["roomName"] = room_name
                     user_state["roomHost"] = user_state["userName"]
-                    # print("The room is created. You will be redirected to the room now.")
-                    # press_enter_to_continue()
+                    user_state["roomNumMembers"] = 1
                     room_page = \
 """{:=^{width}}
 {}{: ^{width}}{}
@@ -405,8 +403,7 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[str]) -> int:
 {: ^{width}}
 {:=^{width}}
 """.format("", STYLE_BOLD, room_name, STYLE_DEFAULT, "ID: {}".format(room_id), "", "Play Game: {}".format(game_name), "", "Host: {}".format(user_state["roomHost"]), "", width = shutil.get_terminal_size()[0])
-                    PAGE2ID[room_page] = 5
-                    pages.append(room_page)
+                    pages.append((PAGETYPE_ROOM, room_page))
                     return RETCODE_NORMAL
                 elif response["status"] == "FAIL":
                     print("Failed to create a room. Get the following error from the server: {}".format(response["errorMessage"]))
@@ -438,6 +435,7 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[str]) -> int:
                     room_name = response["roomName"]
                     room_host = response["roomHost"]
                     game_name = response["gameName"]
+                    user_state["roomNumMembers"] = response["roomNumMembers"]
                     user_state["roomName"] = room_name
                     user_state["roomHost"] = room_host
                     room_page = \
@@ -450,10 +448,7 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[str]) -> int:
 {: ^{width}}
 {:=^{width}}
 """.format("", STYLE_BOLD, room_name, STYLE_DEFAULT, "ID: {}".format(room_id), "", "Play Game: {}".format(game_name), "", "Host: {}".format(user_state["roomHost"]), "", width = shutil.get_terminal_size()[0])
-                    PAGE2ID[room_page] = 5
-                    pages.append(room_page)
-                    print("You will be redirected to the room now.")
-                    press_enter_to_continue()
+                    pages.append((PAGETYPE_ROOM, room_page))
                     return RETCODE_NORMAL
                 elif response["status"] == "FAIL":
                     print("Failed to join the room. Get the following message from the server: {}".format(response["errorMessage"]))
@@ -541,7 +536,7 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[str]) -> int:
 
             case "8": # List active rooms
                 while True:
-                    game_id = input("Specify the id of a game that rooms are playing (Press ENTER if you want to skip this): ")
+                    game_id = input("Input id of the game that you want to play (Press ENTER if you want to skip this): ")
                     if game_id:
                         try:
                             game_id = int(game_id)
@@ -648,13 +643,15 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[str]) -> int:
             case _:
                 print("Invalid option id. Please try again.")
 
-def _room_page(server_sock: socket.socket, pages: list[str]) -> int:
+def _room_page(server_sock: socket.socket, pages: list[tuple]) -> int:
     messages = []
     rlist = [sys.stdin, server_sock]
     leave = False
+    n_members = user_state["roomNumMembers"]
     while not leave:
         clear_screen()
-        print(pages[-1])
+        print(pages[-1][1], end = "")
+        print("{: ^{width}}\n{:=^{width}}".format("Members: {}".format(n_members), "", width = shutil.get_terminal_size()[0]))
         for msg in messages:
             if msg[0] == user_state["userName"]:
                 print(STYLE_BOLD + "[{}] {}".format(msg[0], msg[1]) + STYLE_DEFAULT)
@@ -700,8 +697,10 @@ def _room_page(server_sock: socket.socket, pages: list[str]) -> int:
                         messages.append((server_message["fromUserName"], server_message["content"]))
                     elif server_message["messageType"] == "room control":
                         if server_message["event"] == "join":
+                            n_members += 1
                             messages.append(("", "{} joined the room.".format(server_message["userName"])))
                         elif server_message["event"] == "leave":
+                            n_members -= 1
                             messages.append(("", "{} left the room.".format(server_message["userName"])))
                         elif server_message["event"] == "close":
                             request = {
@@ -718,10 +717,10 @@ def _room_page(server_sock: socket.socket, pages: list[str]) -> int:
                             return RETCODE_ERROR
     
     press_enter_to_continue()
-    pages.append(PAGE_USER_DASHBOARD)
+    pages.append((PAGETYPE_USER_DASHBOARD, PAGE_USER_DASHBOARD))
     return RETCODE_NORMAL
 
-def _admin_page(server_sock: socket.socket, pages: list[str]) -> int:
+def _admin_page(server_sock: socket.socket, pages: list[tuple]) -> int:
     while True:
         command_prompt(user_state["userName"])
         opt = input()
@@ -1030,23 +1029,22 @@ def _admin_page(server_sock: socket.socket, pages: list[str]) -> int:
             case _:
                 print("Invalid option. Please try again.")
 
-def page_handle(server_sock: socket.socket, pages: list[str]) -> int:
-    page_id = PAGE2ID[pages[-1]]
-    match page_id:
-        case 1:
-            return _init_page(server_sock, pages)
-        case 2:
-            return _sign_in_page(server_sock, pages)
-        case 3:
-            return _sign_up_page(server_sock, pages)
-        case 4:
-            return _user_dashboard_page(server_sock, pages)
-        case 5:
-            return _room_page(server_sock, pages)
-        case 6:
-            return _admin_page(server_sock, pages)
-        case _:
-            return RETCODE_ERROR
+def page_handle(server_sock: socket.socket, pages: list[tuple]) -> int:
+    page_type = pages[-1][0]
+    if page_type == PAGETYPE_INITIALIZE:
+        return _init_page(server_sock, pages)
+    elif page_type == PAGETYPE_SIGN_IN :
+        return _sign_in_page(server_sock, pages)
+    elif page_type == PAGETYPE_SIGN_UP:
+        return _sign_up_page(server_sock, pages)
+    elif page_type == PAGETYPE_USER_DASHBOARD:
+        return _user_dashboard_page(server_sock, pages)
+    elif page_type == PAGETYPE_ROOM:
+        return _room_page(server_sock, pages)
+    elif page_type == PAGETYPE_ADMIN:
+        return _admin_page(server_sock, pages)
+    else:
+        return RETCODE_ERROR
 
 def main(args):
     host = args.host
@@ -1060,10 +1058,10 @@ def main(args):
         press_enter_to_continue()
         clear_screen()
 
-        pages = [PAGE_INITIALIZE]
+        pages = [(PAGETYPE_INITIALIZE, PAGE_INITIALIZE)]
         while True:
             clear_screen()
-            print(pages[-1], end = "")
+            print(pages[-1][1], end = "")
 
             code = page_handle(server_sock, pages)
             if code == RETCODE_ERROR:

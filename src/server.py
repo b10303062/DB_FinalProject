@@ -444,10 +444,19 @@ def _user_join_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, 
             room_host = row["user_name"]
             game_name = row["game_name"]
 
+            query = """
+                    SELECT "user_id", "leave_time"
+                    FROM "user_in_room"
+                    WHERE "room_id" = {};
+                    """.format(room_id)
+            cursor.execute(query)
+            users_in_room = cursor.fetchall()
+
             response = {
                 "status": "OK",
                 "roomName": room_name,
                 "roomHost": room_host,
+                "roomNumMembers": len(users_in_room),
                 "gameName": game_name
             }
 
@@ -466,14 +475,6 @@ def _user_join_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, 
                 "userID": user_id,
                 "userName": user_name
             }
-
-            query = """
-                    SELECT "user_id", "leave_time"
-                    FROM "user_in_room"
-                    WHERE "room_id" = {};
-                    """.format(room_id)
-            cursor.execute(query)
-            users_in_room = cursor.fetchall()
 
         sendall(client_sock, response)
         if room_found:
