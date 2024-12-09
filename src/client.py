@@ -61,7 +61,7 @@ Please choose from the below options:
 
 [8] List active rooms
 
-[9] Check user reviews
+[9] Check game reviews
 
 [c] Clear the screen
 
@@ -611,6 +611,12 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[tuple]) -> int:
 
             case "9": # Check user reviews
                 while True:
+                    try:
+                        game_id = int(input("Please enter the game id: "))
+                        break
+                    except:
+                        print("Invalid input. Please try again.")
+                while True:
                     user_id = input("Please input the id of the target user (Press ENTER if you want to skip this): ")
                     if user_id:
                         try:
@@ -620,12 +626,6 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                             print("Invalid input. Please try again.")
                     else:
                         break
-                while True:
-                    try:
-                        game_id = int(input("Please enter the game id: "))
-                        break
-                    except:
-                        print("Invalid input. Please try again.")
                 while True:
                     rating = input("Please input the target rating number (Press ENTER if you want to skip this): ")
                     if rating:
