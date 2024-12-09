@@ -104,7 +104,8 @@ user_state = {
     "roomID": -1,
     "roomName": "",
     "roomHost": "",
-    "roomNumMembers": -1
+    "roomNumMembers": -1,
+    "roomNumMembersLimit": -1
 }
 
 def _init_page(server_sock: socket.socket, pages: list[tuple]) -> int:
@@ -301,9 +302,19 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                         print("Invalid input. Please try again.")
 
                 if opt == "A":
-                    game_id = int(input("game id: "))
+                    while True:
+                        try:
+                            game_id = int(input("game id: "))
+                            break
+                        except:
+                            print("Invalid input. Please try again.")
                     review_text = input("Please write your review (Or press ENTER to skip): ")
-                    review_rating = int(input("Please rate this game (select an integer from 1 to 5): "))
+                    while True:
+                        try:
+                            review_rating = int(input("Please rate this game (select an integer from 1 to 5): "))
+                            break
+                        except:
+                            print("Invalid input. Please try again.")
 
                     request = {
                         "requestType": "add review",
@@ -313,7 +324,12 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                         "reviewRating": review_rating
                     }
                 else:
-                    game_id = int(input("game id: "))
+                    while True:
+                        try:
+                            game_id = int(input("game id: "))
+                            break
+                        except:
+                            print("Invalid input. Please try again.")
 
                     request = {
                         "requestType": "delete review",
@@ -393,6 +409,7 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                     user_state["roomName"] = room_name
                     user_state["roomHost"] = user_state["userName"]
                     user_state["roomNumMembers"] = 1
+                    user_state["roomNumMembersLimit"] = response["roomNumMembersLimit"]
                     room_page = \
 """{:=^{width}}
 {}{: ^{width}}{}
@@ -436,6 +453,7 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                     room_host = response["roomHost"]
                     game_name = response["gameName"]
                     user_state["roomNumMembers"] = response["roomNumMembers"]
+                    user_state["roomNumMembersLimit"] = response["roomNumMembersLimit"]
                     user_state["roomName"] = room_name
                     user_state["roomHost"] = room_host
                     room_page = \
@@ -643,15 +661,37 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[tuple]) -> int:
             case _:
                 print("Invalid option id. Please try again.")
 
+def json_split(json_stream: str):
+    jsons = []
+    stack_len = 0
+    init = True
+    start = 0
+    end = 0
+    for i in range(len(json_stream)):
+        if json_stream[i] == "{":
+            init = False
+            stack_len += 1
+        elif json_stream[i] == "}":
+            stack_len -= 1
+        
+        if stack_len == 0 and not init:
+            start = end
+            end = i + 1
+            jsons.append(json_stream[start:end])
+
+    return jsons
+    
 def _room_page(server_sock: socket.socket, pages: list[tuple]) -> int:
     messages = []
     rlist = [sys.stdin, server_sock]
     leave = False
+    close = False
     n_members = user_state["roomNumMembers"]
-    while not leave:
+    n_members_max = user_state["roomNumMembersLimit"]
+    while not leave and not close:
         clear_screen()
         print(pages[-1][1], end = "")
-        print("{: ^{width}}\n{:=^{width}}".format("Members: {}".format(n_members), "", width = shutil.get_terminal_size()[0]))
+        print("{: ^{width}}\n{:=^{width}}".format("Members: {:2d} / {:2d}".format(n_members, n_members_max), "", width = shutil.get_terminal_size()[0]))
         for msg in messages:
             if msg[0] == user_state["userName"]:
                 print(STYLE_BOLD + "[{}] {}".format(msg[0], msg[1]) + STYLE_DEFAULT)
@@ -668,16 +708,7 @@ def _room_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                 line = sys.stdin.readline().strip('\n')
                 if line:
                     if line == "\\quit":
-                        request = {
-                            "requestType": "leave room",
-                            "userID": user_state["userID"],
-                            "roomID": user_state["roomID"]
-                        }
-                        sendall(server_sock, request)
-                        response = json.loads(recvall(server_sock, BUFFER_MAXLEN))
-                        if response["status"] == "OK":
-                            leave = True
-                            print("\033[{};1HYou will now leave the room.\033[0m".format(shutil.get_terminal_size()[1]))
+                        leave = True
                     else:
                         request = {
                             "requestType": "room communication",
@@ -703,19 +734,22 @@ def _room_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                             n_members -= 1
                             messages.append(("", "{} left the room.".format(server_message["userName"])))
                         elif server_message["event"] == "close":
-                            request = {
-                                "requestType": "leave room",
-                                "userID": user_state["userID"],
-                                "roomID": user_state["roomID"]
-                            }
-                            sendall(server_sock, request)
-                            response = json.loads(recvall(server_sock, BUFFER_MAXLEN))
-                            if response["status"] == "OK":
-                                leave = True
-                                print("\033[{};1HThe room will be closed as the host has exited.\033[0m".format(shutil.get_terminal_size()[1]))
+                            close = True
                         else:
                             return RETCODE_ERROR
     
+    # leave room
+    if leave:
+        request = {
+            "requestType": "leave room",
+            "userID": user_state["userID"],
+            "roomID": user_state["roomID"]
+        }
+        sendall(server_sock, request)
+        response = json.loads(recvall(server_sock, BUFFER_MAXLEN))
+        if response["status"] == "OK":
+            print("\033[{};1HYou will now leave the room.\033[0m".format(shutil.get_terminal_size()[1]))
+    print("\033[{};1HThe room will be closed as the host has exited.\033[0m".format(shutil.get_terminal_size()[1]))
     press_enter_to_continue()
     pages.append((PAGETYPE_USER_DASHBOARD, PAGE_USER_DASHBOARD))
     return RETCODE_NORMAL

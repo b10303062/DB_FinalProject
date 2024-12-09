@@ -16,6 +16,8 @@ RETCODE_ERROR = -1
 
 BUFFER_MAXLEN = 4096
 
+join_room_lock = threading.Lock()
+
 # Record all clients' sockets
 client_id2sock = {}
 
@@ -26,6 +28,8 @@ PG_USER = None
 PG_PASSWORD = None
 PG_DBNAME = None
 ISOLATION_LEVEL = 3
+
+ROOM_MEMBER_MAX = 10
 
 REQUEST_MAP = {
     # General functions
@@ -365,7 +369,8 @@ def _user_create_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor
             response = {
                 "status": "OK",
                 "roomID": room_id,
-                "gameName": game_name
+                "gameName": game_name,
+                "roomNumMembersLimit": ROOM_MEMBER_MAX
             }
 
         else:
@@ -388,7 +393,10 @@ def _user_create_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor
         sendall(client_sock, response)
 
 def _user_join_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
+    join_room_lock.acquire()
+
     try:
+
         user_id = request["userID"]
         room_id = request["roomID"]
         join_time = str(datetime.datetime.now().replace(microsecond=0))
@@ -407,81 +415,100 @@ def _user_join_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, 
                 "status": "FAIL",
                 "errorMessage": "Room not found"
             }
+            sendall(client_sock, response)
         
         else:
             room_found = True
+            
             query = """
-                    SELECT "user_id", "room_id"
+                    SELECT COUNT(*)
                     FROM "user_in_room"
-                    WHERE "user_id" = {} AND "room_id" = {};
-                    """.format(user_id, room_id)
+                    WHERE "room_id" = {} AND "leave_time" IS NULL;
+                    """.format(room_id)
             cursor.execute(query)
-            row = cursor.fetchone()
+            n_members = cursor.fetchone()["count"]
 
-            if not row:
+            if n_members < ROOM_MEMBER_MAX:
                 query = """
-                        INSERT INTO "user_in_room" ("user_id", "room_id", "join_time")
-                        VALUES ({}, {}, '{}');
-                        """.format(user_id, room_id, join_time)
-            else:
-                query = """
-                        UPDATE "user_in_room"
-                        SET "join_time" = '{}', "leave_time" = NULL
+                        SELECT "user_id", "room_id"
+                        FROM "user_in_room"
                         WHERE "user_id" = {} AND "room_id" = {};
-                        """.format(join_time, user_id, room_id)
-            cursor.execute(query)
+                        """.format(user_id, room_id)
+                cursor.execute(query)
+                row = cursor.fetchone()
 
-            query = """
-                    SELECT "r"."room_name", "u"."user_name", "g"."game_name"
-                    FROM "room" AS "r"
-                        JOIN "user" AS "u" ON "u"."user_id" = "r"."creator_id"
-                        JOIN "game" AS "g" ON "g"."game_id" = "r"."game_id"
-                    WHERE "room_id" = {};
-                    """.format(room_id)
-            cursor.execute(query)
-            row =  cursor.fetchone()
-            room_name = row["room_name"]
-            room_host = row["user_name"]
-            game_name = row["game_name"]
+                if not row:
+                    query = """
+                            INSERT INTO "user_in_room" ("user_id", "room_id", "join_time")
+                            VALUES ({}, {}, '{}');
+                            """.format(user_id, room_id, join_time)
+                else:
+                    query = """
+                            UPDATE "user_in_room"
+                            SET "join_time" = '{}', "leave_time" = NULL
+                            WHERE "user_id" = {} AND "room_id" = {};
+                            """.format(join_time, user_id, room_id)
+                cursor.execute(query)
 
-            query = """
-                    SELECT "user_id", "leave_time"
-                    FROM "user_in_room"
-                    WHERE "room_id" = {};
-                    """.format(room_id)
-            cursor.execute(query)
-            users_in_room = cursor.fetchall()
+                query = """
+                        SELECT "r"."room_name", "u"."user_name", "g"."game_name"
+                        FROM "room" AS "r"
+                            JOIN "user" AS "u" ON "u"."user_id" = "r"."creator_id"
+                            JOIN "game" AS "g" ON "g"."game_id" = "r"."game_id"
+                        WHERE "room_id" = {};
+                        """.format(room_id)
+                cursor.execute(query)
+                row =  cursor.fetchone()
+                room_name = row["room_name"]
+                room_host = row["user_name"]
+                game_name = row["game_name"]
 
-            response = {
-                "status": "OK",
-                "roomName": room_name,
-                "roomHost": room_host,
-                "roomNumMembers": len(users_in_room),
-                "gameName": game_name
-            }
+                query = """
+                        SELECT "user_id", "leave_time"
+                        FROM "user_in_room"
+                        WHERE "room_id" = {} AND "leave_time" IS NULL;
+                        """.format(room_id)
+                cursor.execute(query)
+                users_in_room = cursor.fetchall()
 
-            query = """
-                    SELECT "user_name"
-                    FROM "user"
-                    WHERE "user_id" = {};
-                    """.format(user_id)
-            cursor.execute(query)
-            user_name = cursor.fetchone()["user_name"]
+                response = {
+                    "status": "OK",
+                    "roomName": room_name,
+                    "roomHost": room_host,
+                    "roomNumMembers": len(users_in_room),
+                    "roomNumMembersLimit": ROOM_MEMBER_MAX,
+                    "gameName": game_name
+                }
 
-            response_broadcast = {
-                "status": "OK",
-                "messageType": "room control",
-                "event": "join",
-                "userID": user_id,
-                "userName": user_name
-            }
+                query = """
+                        SELECT "user_name"
+                        FROM "user"
+                        WHERE "user_id" = {};
+                        """.format(user_id)
+                cursor.execute(query)
+                user_name = cursor.fetchone()["user_name"]
 
-        sendall(client_sock, response)
-        if room_found:
-            for user in users_in_room:
-                if user["user_id"] != user_id and not user["leave_time"]:
-                    sendall(client_id2sock[user["user_id"]], response_broadcast)
+                response_broadcast = {
+                    "status": "OK",
+                    "messageType": "room control",
+                    "event": "join",
+                    "userID": user_id,
+                    "userName": user_name
+                }
 
+                sendall(client_sock, response)
+                if room_found:
+                    for user in users_in_room:
+                        if user["user_id"] != user_id:
+                            sendall(client_id2sock[user["user_id"]], response_broadcast)
+            
+            else:
+                response = {
+                    "status": "FAIL",
+                    "errorMessage": "The room is full now"
+                }
+                sendall(client_sock, response)       
+        
         pg_conn.commit()
 
     except Exception as e:
@@ -492,6 +519,8 @@ def _user_join_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, 
             "errorMessage": "Unknown error"
         }
         sendall(client_sock, response)
+    
+    join_room_lock.release()
 
 def _user_check_user(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
@@ -780,7 +809,7 @@ def _user_leave_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor,
         cursor.execute(query)
         user_name = cursor.fetchone()["user_name"]
 
-        response_broadcast1 = {
+        response_broadcast_leave = {
             "status": "OK",
             "messageType": "room control",
             "event": "leave",
@@ -791,18 +820,26 @@ def _user_leave_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor,
         query = """
                 SELECT "user_id", "leave_time"
                 FROM "user_in_room"
-                WHERE "room_id" = {};
+                WHERE "room_id" = {} AND "leave_time" IS NULL;
                 """.format(room_id)
         cursor.execute(query)
-        user_in_rooms = cursor.fetchall()
+        users_in_room = cursor.fetchall()
         
         if room_host_id == user_id:
-            response_broadcast2 = {
+            response_broadcast_close = {
                 "status": "OK",
                 "messageType": "room control",
                 "event": "close"
             }
 
+            for user in users_in_room:
+                query = """
+                UPDATE "user_in_room"
+                SET "leave_time" = '{}'
+                WHERE "user_id" = {} AND "room_id" = {};
+                """.format(leave_time, user["user_id"], room_id)
+                cursor.execute(query)
+            
             end_time = str(datetime.datetime.now().replace(microsecond=0))
             query = """
                     UPDATE "room"
@@ -812,12 +849,12 @@ def _user_leave_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor,
             cursor.execute(query)
 
         sendall(client_sock, response)
-        for user in user_in_rooms:
-            if user["user_id"] != user_id and not user["leave_time"]:
+        for user in users_in_room:
+            if user["user_id"] != user_id:
                 if room_host_id == user_id:
-                    sendall(client_id2sock[user["user_id"]], response_broadcast2)
+                    sendall(client_id2sock[user["user_id"]], response_broadcast_close)
                 else:
-                    sendall(client_id2sock[user["user_id"]], response_broadcast1)
+                    sendall(client_id2sock[user["user_id"]], response_broadcast_leave)
 
         pg_conn.commit()
 
@@ -866,11 +903,11 @@ def _admin_add_game(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, 
         if genres:
             query = """
                     INSERT INTO "game_genre" ("game_id", "genre")
-                    """
-            value_statements = []
+                    VALUES """
+            values = []
             for genre in genres:
-                value_statements.append("VALUES ({}, \'{}\')".format(game_id, genre))
-            query += "\n".join(value_statements) + ";"
+                values.append("({}, \'{}\')".format(game_id, genre))
+            query += ", ".join(values) + ";"
             cursor.execute(query)
         
         else:
@@ -947,7 +984,7 @@ def _admin_update_game(pg_conn: psycopg.Connection, request: dict, cursor: Curso
                 values = []
                 for genre in genres:
                     values.append("({}, \'{}\')".format(game_id, genre))
-                query += " ".join(values) + ";"
+                query += ", ".join(values) + ";"
                 cursor.execute(query)
 
             response = {
