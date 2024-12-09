@@ -196,7 +196,7 @@ def _sign_up_page(server_sock: socket.socket, pages: list[tuple]) -> int:
 
     if response["status"] == "OK":
         print("Sign up OK.")
-        print("Your user id is {}. Please remember it since you need it to sign in.".format(response["userID"]))
+        print("Your user id is {}. Please remember it since you need it to sign in.".format(FG_COLOR_GREEN + str(response["userID"]) + STYLE_DEFAULT))
         press_enter_to_continue()
         pages.append((PAGETYPE_INITIALIZE, PAGE_INITIALIZE))
         return RETCODE_NORMAL
@@ -856,7 +856,7 @@ def _admin_page(server_sock: socket.socket, pages: list[tuple]) -> int:
 
                 if response["status"] == "OK":
                     print("The game has been added to the database.")
-                    print("The game id is {}. Please remember it.".format(response["gameID"]))
+                    print("The game id is {}. Please remember it for further operations.".format(FG_COLOR_GREEN + str(response["gameID"]) + STYLE_DEFAULT))
                     press_enter_to_continue()
                     return RETCODE_NORMAL
                 elif response["status"] == "FAIL":
