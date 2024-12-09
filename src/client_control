@@ -601,22 +601,27 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                         print("Number of Players: {} / {}".format(room["numMembers"], room["numMembersLimit"]))                        
                         print()
                     print("{} rooms has been found.".format(len(response["rooms"])))
-                    press_enter_to_continue()
 
-                    # 發送離開房間列表的請求
+                    conn = input("Do you want to join a room? [Y]es/[N]o: ")
+                    if conn == "N":
+                        return RETCODE_NORMAL
+
+                    # 發送進入選擇房間的請求（下面變數名應該是Choose_request）
                     leave_request = {
                         "requestType": "leave list rooms"
                     }
                     sendall(server_sock, leave_request)
                     leave_response = json.loads(recvall(server_sock, BUFFER_MAXLEN))
                     if leave_response["status"] == "OK":
-                        print("You have left the room list.")
+                        print("You are now joining a room.")
+                    else:
+                        print("Failed to leave the list of rooms. Get the following error from the server: {}".format(leave_response["errorMessage"]))
+                        press_enter_to_continue()
+                        return RETCODE_NORMAL
 
                     # 提示使用者輸入 room_id 來加入房間
                     while True:
                         room_id = input("Please enter the id of the room to join (Press ENTER to skip): ")
-                        if room_id == "":
-                            return RETCODE_NORMAL
                         try:
                             room_id = int(room_id)
                             break
