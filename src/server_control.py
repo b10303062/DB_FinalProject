@@ -17,6 +17,7 @@ RETCODE_ERROR = -1
 BUFFER_MAXLEN = 4096
 
 join_room_lock = threading.Lock()
+leave_list_rooms_lock = threading.Lock()
 
 # Record all clients' sockets
 client_id2sock = {}
@@ -552,9 +553,8 @@ def _user_join_room(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, 
         }
         sendall(client_sock, response)
     finally:
-        # 釋放 Lock
-        if join_room_lock.locked():
-            join_room_lock.release()
+        # 釋放 join_room_lock
+        join_room_lock.release()
 
 def _user_check_user(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
     try:
@@ -680,7 +680,6 @@ def _user_list_rooms(pg_conn: psycopg.Connection, request: dict, cursor: Cursor,
     try:
         game_id = request.get("gameID")
 
-        # 使用 Lock 保護臨界區域
         join_room_lock.acquire()
 
         query = """
@@ -1108,12 +1107,23 @@ def _admin_setup_promotion(pg_conn: psycopg.Connection, request: dict, cursor: C
         sendall(client_sock, response)
 
 def _user_leave_list_rooms(request: dict, cursor: Cursor, client_sock: socket.socket):
-    # 釋放 Lock
-    join_room_lock.release()
-    response = {
-        "status": "OK"
-    }
-    sendall(client_sock, response)
+    if not leave_list_rooms_lock.acquire(blocking=False):
+        response = {
+            "status": "FAIL",
+            "errorMessage": "Another user is leaving the room list. Please try again later."
+        }
+        sendall(client_sock, response)
+        return
+
+    try:
+        # 釋放 join_room_lock
+        join_room_lock.release()
+        response = {
+            "status": "OK"
+        }
+        sendall(client_sock, response)
+    finally:
+        leave_list_rooms_lock.release()
 
 def handle_request(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket) -> int:
     request_id = REQUEST_MAP[request["requestType"]]
