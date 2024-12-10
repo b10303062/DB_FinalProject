@@ -513,8 +513,8 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[tuple]) -> int:
 
                 if response["status"] == "OK":
                     print("Found user:\n")
-                    print("User Name: {}".format(response["userInfo"]["id"]))
-                    print("User ID:   {}".format(response["userInfo"]["name"]))
+                    print("User ID:   {}".format(response["userInfo"]["id"]))
+                    print("User Name: {}".format(response["userInfo"]["name"]))
                     print("Join Date: {}".format(response["userInfo"]["joinDate"]))
                     print("Favorites:")
                     for fav in response["userInfo"]["favorites"]:
