@@ -677,7 +677,7 @@ def _user_list_rooms(pg_conn: psycopg.Connection, request: dict, cursor: Cursor,
         game_id = request.get("gameID")
 
         query = """
-                SELECT "r"."room_id", "r"."room_name", "g"."game_name", "r"."creator_id", "u"."user_name"
+                SELECT "r"."room_id", "r"."room_name", "g"."game_name", "r"."creator_id", "u"."user_name", "r"."max_players"
                 FROM "room" AS "r" 
                     JOIN "user" AS "u" ON "r"."creator_id" = "u"."user_id"
 	                JOIN "game" AS "g" ON "r"."game_id" = "g"."game_id"
@@ -685,19 +685,30 @@ def _user_list_rooms(pg_conn: psycopg.Connection, request: dict, cursor: Cursor,
         if game_id:
             query += """ AND "r"."game_id" = {}""".format(game_id)
         cursor.execute(query)
-        rows = cursor.fetchall()
+        rooms = cursor.fetchall()
+
+        for room in rooms:
+            query = """
+                    SELECT COUNT(*)
+                    FROM "user_in_room"
+                    WHERE "room_id" = {} AND "leave_time" IS NULL;
+                    """.format(room["room_id"])
+            cursor.execute(query)
+            room["roomNumMembers"] = cursor.fetchone()["count"]
 
         response = {
             "status": "OK",
             "rooms": []
         }
-        for row in rows:
+        for room in rooms:
             response["rooms"].append({
-                "roomID": row["room_id"],
-                "roomName": row["room_name"],
-                "playGame": row["game_name"],
-                "hostID": row["creator_id"],
-                "hostName": row["user_name"]
+                "roomID": room["room_id"],
+                "roomName": room["room_name"],
+                "playGame": room["game_name"],
+                "hostID": room["creator_id"],
+                "hostName": room["user_name"],
+                "roomNumMembers": room["roomNumMembers"],
+                "roomNumMembersLimit": room["max_players"]
             })
 
         sendall(client_sock, response)

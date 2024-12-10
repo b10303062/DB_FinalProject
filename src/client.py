@@ -600,6 +600,7 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                         print("Play Game: {}".format(room["playGame"]))
                         print("Host ID: {}".format(room["hostID"]))
                         print("Host Name: {}".format(room["hostName"]))
+                        print("Num Members: {:2d} / {:2d}".format(room["roomNumMembers"], room["roomNumMembersLimit"]))
                         print()
                     print("{} rooms has been found.".format(len(response["rooms"])))
                     press_enter_to_continue()
