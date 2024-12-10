@@ -715,12 +715,12 @@ def _room_page(server_sock: socket.socket, pages: list[tuple]) -> int:
         print(pages[-1][1], end = "")
         print("{: ^{width}}\n{:=^{width}}".format("Members: {:2d} / {:2d}".format(n_members, n_members_max), "", width = shutil.get_terminal_size()[0]))
         for msg in messages:
-            if msg[0] == user_state["userName"]:
-                print(STYLE_BOLD + "[{}] {}".format(msg[0], msg[1]) + STYLE_DEFAULT)
-            elif msg[0]:
-                print("[{}] {}".format(msg[0], msg[1]))
+            if msg[0] == user_state["userID"]:
+                print(STYLE_BOLD + "[{}] {}".format(msg[1], msg[2]) + STYLE_DEFAULT)
+            elif msg[0] > 0:
+                print("[{}] {}".format(msg[1], msg[2]))
             else:
-                print(FG_COLOR_YELLOW + msg[1] + STYLE_DEFAULT)
+                print(FG_COLOR_YELLOW + msg[2] + STYLE_DEFAULT)
         print("\033[{};1HMessage > \033[0m".format(shutil.get_terminal_size()[1]), flush = True, end = "")
 
         readables, _, _ = select.select(rlist, [], [])
@@ -742,19 +742,19 @@ def _room_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                         sendall(server_sock, request)
                         response = json.loads(recvall(server_sock, BUFFER_MAXLEN))
                         if response["status"] == "OK":
-                            messages.append((user_state["userName"], line))
+                            messages.append((user_state["userID"], user_state["userName"], line))
             elif readable == server_sock:
                 server_message = json.loads(recvall(server_sock, BUFFER_MAXLEN))
                 if server_message:
                     if server_message["messageType"] == "room communication":    
-                        messages.append((server_message["fromUserName"], server_message["content"]))
+                        messages.append((server_message["fromUserID"], server_message["fromUserName"], server_message["content"]))
                     elif server_message["messageType"] == "room control":
                         if server_message["event"] == "join":
                             n_members += 1
-                            messages.append(("", "{} joined the room.".format(server_message["userName"])))
+                            messages.append((-1, "", "{} joined the room.".format(server_message["userName"])))
                         elif server_message["event"] == "leave":
                             n_members -= 1
-                            messages.append(("", "{} left the room.".format(server_message["userName"])))
+                            messages.append((-1, "", "{} left the room.".format(server_message["userName"])))
                         elif server_message["event"] == "close":
                             close = True
                         else:
