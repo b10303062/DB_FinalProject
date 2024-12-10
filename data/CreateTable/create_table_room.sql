@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS public.room (
     Start_time timestamp NOT NULL,
     End_time timestamp NOT NULL,
     Status VARCHAR(10) NOT NULL CHECK (Status IN ('Active', 'Closed')),
+	MaxPlayers bigint NOT NULL,	
     FOREIGN KEY (Creator_id) REFERENCES public.USER(User_id) ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY (Game_id) REFERENCES public.GAME(Game_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
