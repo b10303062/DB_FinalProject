@@ -154,7 +154,7 @@ python src/server.py [--port <port>] [--pg_host <PGhost>] [--pg_port <PGport>] [
 ```
 參數說明：
 
-`--port`: 伺服器榜定的 port。預設為 **8888**。
+`--port`: 伺服器綁定的 port。預設為 **8888**。
 
 `--pg_host`: PostgreSQL 伺服器所在的 host。預設為 **127.0.0.1**
 
