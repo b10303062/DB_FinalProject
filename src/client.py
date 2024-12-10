@@ -970,7 +970,7 @@ def _admin_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                     press_enter_to_continue()
                     return RETCODE_NORMAL
                 elif response["status"] == "FAIL":
-                    print("Failed to delete the game. Get the following error fromt the server: {}".format(response["errorMessage"]))
+                    print("Failed to delete the game. Get the following error from the server: {}".format(response["errorMessage"]))
                     press_enter_to_continue()
                     return RETCODE_NORMAL
                 else:
