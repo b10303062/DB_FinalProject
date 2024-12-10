@@ -79,11 +79,13 @@ Please choose from the below options:
 
 [2] Update game
 
-[3] Delete game
+[3] Search game
 
-[4] Setup promotion
+[4] Delete game
 
-[5] Update user
+[5] Setup promotion
+
+[6] Update user
 
 [c] Clear the screen
 
@@ -950,6 +952,83 @@ def _admin_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                     return RETCODE_ERROR
             
             case "3":
+                game_name = input("Game name (Press ENTER if you want to skip this): ")
+                if game_name == "":
+                    game_name = None
+                genres = input("Game genres (Press ENTER if you want to skip this. Split by commas if multiple inputs): ")
+                genres = [genre.strip() for genre in genres.split(",")] if genres else None
+                while True:
+                    price_low = input("Price lower bound (Press ENTER if you want to skip this): ")
+                    if not price_low:
+                        price_low = None
+                        break
+                    else:
+                        try:
+                            price_low = float(price_low)
+                            break
+                        except:
+                            print("Invalid input. Please try again.")
+                            continue
+                while True:
+                    price_upp = input("Price upper bound (Press ENTER if you want to skip this): ")
+                    if not price_upp:
+                        price_upp = None
+                        break
+                    else:
+                        try:
+                            price_upp = float(price_upp)
+                            break
+                        except:
+                            print("Invalid input. Please try again.")
+
+                request = {
+                    "requestType": "search games",
+                    "gameName": game_name,
+                    "genres": genres,
+                    "priceLow": price_low,
+                    "priceUpp": price_upp
+                }
+                sendall(server_sock, request)
+                response = json.loads(recvall(server_sock, BUFFER_MAXLEN))
+
+                if response["status"] == "OK":
+                    print("Results:\n")
+                    if game_name:
+                        game_name_lc = game_name.lower()
+                    for data in response["data"]:
+                        if game_name:
+                            match_pos = data["gameName"].lower().find(game_name_lc)
+                            game_name_formatted = "{}{}{}{}{}".format(
+                                data["gameName"][:match_pos],
+                                FG_COLOR_GREEN,
+                                data["gameName"][match_pos:match_pos + len(game_name)],
+                                STYLE_DEFAULT,
+                                data["gameName"][match_pos + len(game_name):]
+                            )
+                            print("Game:\t\t\t{}".format(game_name_formatted))
+                        else:
+                            print("Game:\t\t\t{}".format(data["gameName"]))
+                        print("Game ID:\t\t{}".format(data["gameID"]))
+                        print("Genres:\t\t\t{}".format("/".join(data["genres"])))
+                        print("Release Date:\t\t{}".format(data["releaseDate"]))
+                        print("Total Achievements:\t{}".format(data["totalAchievements"]))
+                        print("Positive Ratings:\t{}".format(data["positiveRatings"]))
+                        print("Negative Ratings:\t{}".format(data["negativeRatings"]))
+                        print()
+
+                    print("{} games were found.".format(len(response["data"])))
+                    press_enter_to_continue()
+
+                    return RETCODE_NORMAL
+
+                elif response["status"] == "FAIL":
+                    print("Get the following error from server: {}".format(response))              
+                    return RETCODE_NORMAL
+                
+                else:
+                    return RETCODE_ERROR                
+
+            case "4":
                 while True:
                     game_id = input("Game id: ")
                     try:
@@ -976,7 +1055,7 @@ def _admin_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                 else:
                     return RETCODE_ERROR
             
-            case "4":
+            case "5":
                 while True:
                     start_date = input("Start date in format YYYY-MM-DD: ")
                     try:
@@ -1022,7 +1101,7 @@ def _admin_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                 else:
                     return RETCODE_ERROR
             
-            case "5":
+            case "6":
                 print("Please enter the new information. You can press ENTER to skip if you're not going to update that information.")
                 while True:
                     user_id = input("User id: ")
