@@ -50,8 +50,7 @@ REQUEST_MAP = {
     # Admin functions
     "add game": 15,
     "update game": 16,
-    "delete game": 17,
-    "setup promotion": 18
+    "delete game": 17
 }
 
 def _exit(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
@@ -1078,35 +1077,6 @@ def _admin_delete_game(pg_conn: psycopg.Connection, request: dict, cursor: Curso
         }
         sendall(client_sock, response)
 
-def _admin_setup_promotion(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket):
-    try:
-        start_date = request["startDate"]
-        end_date = request["endDate"]
-        discount_rate = request["discountRate"]
-
-        query = """
-                INSERT INTO "promotion" ("start_date", "end_date", "discount_rate")
-                VALUES ('{}', '{}', {});
-                """.format(start_date, end_date, discount_rate)
-        cursor.execute(query)
-
-        response = {
-            "status": "OK"
-        }
-
-        sendall(client_sock, response)
-
-        pg_conn.commit()
-
-    except Exception as e:
-        pg_conn.rollback()
-        print("[Error] {}".format(e))
-        response = {
-            "status": "FAIL",
-            "errorMessage": "Unknown error"
-        }
-        sendall(client_sock, response)
-
 def handle_request(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, client_sock: socket.socket) -> int:
     request_id = REQUEST_MAP[request["requestType"]]
     match request_id:
@@ -1147,8 +1117,6 @@ def handle_request(pg_conn: psycopg.Connection, request: dict, cursor: Cursor, c
             _admin_update_game(pg_conn, request, cursor, client_sock)
         case 17:
             _admin_delete_game(pg_conn, request, cursor, client_sock)
-        case 18:
-            _admin_setup_promotion(pg_conn, request, cursor, client_sock)
         case _:
            return RETCODE_ERROR
 

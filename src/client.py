@@ -83,9 +83,7 @@ Please choose from the below options:
 
 [4] Delete game
 
-[5] Setup promotion
-
-[6] Update user
+[5] Update user
 
 [c] Clear the screen
 
@@ -1056,52 +1054,6 @@ def _admin_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                     return RETCODE_ERROR
             
             case "5":
-                while True:
-                    start_date = input("Start date in format YYYY-MM-DD: ")
-                    try:
-                        datetime.date.fromisoformat(start_date)
-                        break
-                    except Exception as e:
-                        print("Invalid input. Please try again.")
-                        print(FG_COLOR_YELLOW + "Hint: {}".format(e) + STYLE_DEFAULT)
-                while True:
-                    end_date = input("End date in format YYYY-MM-DD: ")
-                    try:
-                        datetime.date.fromisoformat(end_date)
-                        break
-                    except Exception as e:
-                        print("Invalid input. Please try again.")
-                        print(FG_COLOR_YELLOW + "Hint: {}".format(e) + STYLE_DEFAULT)
-                while True:
-                    discount_rate = input("Discount rate in percentage format without the \'%\' (For example, input \'50\' instead of \'50%\'): ")
-                    try:
-                        discount_rate = int(discount_rate)
-                        break
-                    except:
-                        print("Invalid input. Please try again.")
-
-                request = {
-                    "requestType": "setup promotion",
-                    "startDate": start_date,
-                    "endDate": end_date,
-                    "discountRate": discount_rate
-                }
-                
-                sendall(server_sock, request)
-                response = json.loads(recvall(server_sock, BUFFER_MAXLEN))
-
-                if response["status"] == "OK":
-                    print("Setup ok.")
-                    press_enter_to_continue()
-                    return RETCODE_NORMAL
-                elif response["status"] == "FAIL":
-                    print("Setup failed. Get the following error from the server: {}".format(response["errorMessage"]))
-                    press_enter_to_continue()
-                    return RETCODE_NORMAL
-                else:
-                    return RETCODE_ERROR
-            
-            case "6":
                 print("Please enter the new information. You can press ENTER to skip if you're not going to update that information.")
                 while True:
                     user_id = input("User id: ")
