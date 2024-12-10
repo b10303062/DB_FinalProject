@@ -600,7 +600,7 @@ def _user_dashboard_page(server_sock: socket.socket, pages: list[tuple]) -> int:
                         print("Play Game: {}".format(room["playGame"]))
                         print("Host ID: {}".format(room["hostID"]))
                         print("Host Name: {}".format(room["hostName"]))
-                        print("Num Members: {:2d} / {:2d}".format(room["roomNumMembers"], room["roomNumMembersLimit"]))
+                        print("Num Members: {:2d}/{:2d}".format(room["roomNumMembers"], room["roomNumMembersLimit"]))
                         print()
                     print("{} rooms has been found.".format(len(response["rooms"])))
                     press_enter_to_continue()
@@ -713,7 +713,7 @@ def _room_page(server_sock: socket.socket, pages: list[tuple]) -> int:
     while not leave and not close:
         clear_screen()
         print(pages[-1][1], end = "")
-        print("{: ^{width}}\n{:=^{width}}".format("Members: {:2d} / {:2d}".format(n_members, n_members_max), "", width = shutil.get_terminal_size()[0]))
+        print("{: ^{width}}\n{:=^{width}}".format("Members: {:2d}/{:2d}".format(n_members, n_members_max), "", width = shutil.get_terminal_size()[0]))
         for msg in messages:
             if msg[0] == user_state["userID"]:
                 print(STYLE_BOLD + "[{}] {}".format(msg[1], msg[2]) + STYLE_DEFAULT)
