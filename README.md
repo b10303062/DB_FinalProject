@@ -132,6 +132,8 @@
 
 - PostgreSQL 16.6
 
+已知環境問題：在我們的系統中，遊戲房間使用 select 函式進行實作，然而 Windows 系統未使用 「Everything is a file」 的思維，故 Winsock 函式庫的 select 函式不能對 non-socket objects（例如 stdin）進行操作，因此我們的系統須在 Linux 環境下執行，否則可能會發生無法進入房間的狀況。參考資料：[Python 的 select 函式官方文檔](https://docs.python.org/3/library/select.html#:~:text=Note%20that%20on%20Windows%2C%20it%20only%20works%20for%20sockets)。
+ 
 ### 建立資料庫
 
 首先，使用 `Steam-Together.backup` 復原資料庫。
