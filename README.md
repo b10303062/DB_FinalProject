@@ -167,7 +167,7 @@ python src/server.py [--port <port>] [--pg_host <PGhost>] [--pg_port <PGport>] [
 
 `--pg_password`: PostgreSQL 的使用者密碼。預設為 **postgres**。
 
-`--pg_dbname`: PostgreSQL 資料庫的名稱。此名稱應與[建立資料庫](#建立資料庫)時使用的名稱相同。預設值為 `Steam-Together`。
+`--pg_dbname`: PostgreSQL 資料庫的名稱。此名稱應與[建立資料庫](#建立資料庫)時使用的名稱相同。預設值為 **Steam-Together**。
 
 ### 連接伺服器
 
