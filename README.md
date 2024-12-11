@@ -129,6 +129,7 @@
 - Python 3.12.4
   
   - psycopg 3.2.3
+  - psycopg-binary 3.2.3
 
 - PostgreSQL 16.6
 
